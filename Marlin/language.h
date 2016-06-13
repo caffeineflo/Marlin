@@ -25,8 +25,15 @@
 
 #include "Configuration.h"
 
-#define GENERATE_LANGUAGE_INCLUDE(M)  STRINGIFY_(language_##M.h)
+// Fallback if no language is set. DON'T CHANGE
+#ifndef LCD_LANGUAGE
+  #define LCD_LANGUAGE en
+#endif
 
+// For character-based LCD controllers (DISPLAY_CHARSET_HD44780)
+#define JAPANESE 1
+#define WESTERN  2
+#define CYRILLIC 3
 
 // NOTE: IF YOU CHANGE LANGUAGE FILES OR MERGE A FILE WITH CHANGES
 //
@@ -57,11 +64,6 @@
 // kana_utf8  Japanese (UTF8)
 // cn         Chinese
 // cz         Czech
-
-// fallback if no language is set, don't change
-#ifndef LANGUAGE_INCLUDE
-  #define LANGUAGE_INCLUDE GENERATE_LANGUAGE_INCLUDE(en)
-#endif
 
 #if ENABLED(USE_AUTOMATIC_VERSIONING)
   #include "_Version.h"
@@ -145,8 +147,8 @@
 #define MSG_Z2_MAX                          "z2_max: "
 #define MSG_Z_PROBE                         "z_probe: "
 #define MSG_ERR_MATERIAL_INDEX              "M145 S<index> out of range (0-1)"
-#define MSG_ERR_M421_REQUIRES_XYZ           "M421 requires XYZ parameters"
-#define MSG_ERR_MESH_INDEX_OOB              "Mesh XY index is out of bounds"
+#define MSG_ERR_M421_PARAMETERS             "M421 requires XYZ or IJZ parameters"
+#define MSG_ERR_MESH_XY                     "Mesh XY or IJ cannot be resolved"
 #define MSG_ERR_M428_TOO_FAR                "Too far from reference point"
 #define MSG_ERR_M303_DISABLED               "PIDTEMP disabled"
 #define MSG_M119_REPORT                     "Reporting endstop status"
@@ -232,11 +234,11 @@
 
 // LCD Menu Messages
 
-#if DISABLED(DISPLAY_CHARSET_HD44780_JAPAN) && DISABLED(DISPLAY_CHARSET_HD44780_WESTERN) && DISABLED(DISPLAY_CHARSET_HD44780_CYRILLIC)
-  #define DISPLAY_CHARSET_HD44780_JAPAN
-#endif
+#define LANGUAGE_INCL_(M) STRINGIFY_(language_##M.h)
+#define LANGUAGE_INCL(M) LANGUAGE_INCL_(M)
+#define INCLUDE_LANGUAGE LANGUAGE_INCL(LCD_LANGUAGE)
 
-#include LANGUAGE_INCLUDE
+#include INCLUDE_LANGUAGE
 #include "language_en.h"
 
 #endif //__LANGUAGE_H
