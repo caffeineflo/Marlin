@@ -37,6 +37,8 @@
   #error "Uncomment #define AT90USBxx_TEENSYPP_ASSIGNMENTS in fastio.h for this config"
 #endif
 
+#define BOARD_NAME         "Brainwave Pro"
+
 #define LARGE_FLASH        true
 
 #define X_STEP_PIN         33
@@ -70,11 +72,3 @@
 #define SDSS               20
 #define LED_PIN            19
 #define SD_DETECT_PIN      12
-
-#if DISABLED(SDSUPPORT)
-  // these pins are defined in the SD library if building with SD support
-  #define SCK_PIN          21
-  #define MISO_PIN         23
-  #define MOSI_PIN         22
-#endif
-
