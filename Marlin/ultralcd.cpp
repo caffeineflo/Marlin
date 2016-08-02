@@ -1359,7 +1359,7 @@ void kill_screen(const char* lcd_msg) {
   static void lcd_move_z() { _lcd_move_xyz(PSTR(MSG_MOVE_Z), Z_AXIS, sw_endstop_min[Z_AXIS], sw_endstop_max[Z_AXIS]); }
   static void _lcd_move_e(
     #if E_MANUAL > 1
-      int8_t eindex
+      int8_t eindex=-1
     #endif
   ) {
     if (LCD_CLICKED) { lcd_goto_previous_menu(true); return; }
@@ -1437,9 +1437,8 @@ void kill_screen(const char* lcd_msg) {
           MENU_ITEM(gcode, MSG_SELECT MSG_E2, PSTR("T1"));
       #endif
 
-      #if E_MANUAL == 1
-        MENU_ITEM(submenu, MSG_MOVE_E, lcd_move_e);
-      #else
+      MENU_ITEM(submenu, MSG_MOVE_E, lcd_move_e);
+      #if E_MANUAL > 1
         MENU_ITEM(submenu, MSG_MOVE_E MSG_MOVE_E1, lcd_move_e0);
         MENU_ITEM(submenu, MSG_MOVE_E MSG_MOVE_E2, lcd_move_e1);
         #if E_MANUAL > 2
@@ -1684,7 +1683,7 @@ void kill_screen(const char* lcd_msg) {
         MENU_ITEM_EDIT_CALLBACK(float52, MSG_PID_I ELABEL, &raw_Ki, 0.01, 9990, copy_and_scalePID_i_E ## eindex); \
         MENU_ITEM_EDIT_CALLBACK(float52, MSG_PID_D ELABEL, &raw_Kd, 1, 9990, copy_and_scalePID_d_E ## eindex)
 
-      #if ENABLED(PID_ADD_EXTRUSION_RATE)
+      #if ENABLED(PID_EXTRUSION_SCALING)
         #define _PID_MENU_ITEMS(ELABEL, eindex) \
           _PID_BASE_MENU_ITEMS(ELABEL, eindex); \
           MENU_ITEM_EDIT(float3, MSG_PID_C ELABEL, &PID_PARAM(Kc, eindex), 1, 9990)
