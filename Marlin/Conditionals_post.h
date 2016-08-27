@@ -522,11 +522,11 @@
   #define HAS_THERMALLY_PROTECTED_BED (HAS_TEMP_BED && HAS_HEATER_BED && ENABLED(THERMAL_PROTECTION_BED))
 
   /**
-   * This value is used by M109 when trying to calculate a ballpark safe margin
-   * to prevent wait-forever situation.
+   * This setting is also used by M109 when trying to calculate
+   * a ballpark safe margin to prevent wait-forever situation.
    */
   #ifndef EXTRUDE_MINTEMP
-   #define EXTRUDE_MINTEMP 170
+    #define EXTRUDE_MINTEMP 170
   #endif
 
   /**
@@ -585,8 +585,6 @@
       #define Z_ENDSTOP_SERVO_NR -1
     #endif
   #endif
-
-  #define PROBE_SELECTED (ENABLED(FIX_MOUNTED_PROBE) || ENABLED(Z_PROBE_ALLEN_KEY) || HAS_Z_SERVO_ENDSTOP || ENABLED(Z_PROBE_SLED))
 
   #define PROBE_PIN_CONFIGURED (HAS_Z_MIN_PROBE_PIN || (HAS_Z_MIN && ENABLED(Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN)))
 

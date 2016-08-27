@@ -205,6 +205,7 @@
  * M208 - Set Recover (unretract) Additional (!) Length: S<length> and Feedrate: F<units/min>
  * M209 - Turn Automatic Retract Detection on/off: S<bool> (For slicers that don't support G10/11).
           Every normal extrude-only move will be classified as retract depending on the direction.
+ * M211 - Enable, Disable, and/or Report software endstops: [S<bool>]
  * M218 - Set a tool offset: T<index> X<offset> Y<offset>
  * M220 - Set Feedrate Percentage: S<percent> ("FR" on your LCD)
  * M221 - Set Flow Percentage: S<percent>
@@ -285,8 +286,8 @@ uint8_t marlin_debug_flags = DEBUG_NONE;
 
 float current_position[NUM_AXIS] = { 0.0 };
 static float destination[NUM_AXIS] = { 0.0 };
-bool axis_known_position[3] = { false };
-bool axis_homed[3] = { false };
+bool axis_known_position[XYZ] = { false };
+bool axis_homed[XYZ] = { false };
 
 static long gcode_N, gcode_LastN, Stopped_gcode_LastN = 0;
 
@@ -326,15 +327,18 @@ float filament_size[EXTRUDERS] = ARRAY_BY_EXTRUDERS1(DEFAULT_NOMINAL_FILAMENT_DI
 float volumetric_multiplier[EXTRUDERS] = ARRAY_BY_EXTRUDERS1(1.0);
 
 // The distance that XYZ has been offset by G92. Reset by G28.
-float position_shift[3] = { 0 };
+float position_shift[XYZ] = { 0 };
 
 // This offset is added to the configured home position.
 // Set by M206, M428, or menu item. Saved to EEPROM.
-float home_offset[3] = { 0 };
+float home_offset[XYZ] = { 0 };
 
-// Software Endstops. Default to configured limits.
-float sw_endstop_min[3] = { X_MIN_POS, Y_MIN_POS, Z_MIN_POS };
-float sw_endstop_max[3] = { X_MAX_POS, Y_MAX_POS, Z_MAX_POS };
+// Software Endstops are based on the configured limits.
+#if ENABLED(min_software_endstops) || ENABLED(max_software_endstops)
+  bool soft_endstops_enabled = true;
+#endif
+float soft_endstop_min[XYZ] = { X_MIN_POS, Y_MIN_POS, Z_MIN_POS },
+      soft_endstop_max[XYZ] = { X_MAX_POS, Y_MAX_POS, Z_MAX_POS };
 
 #if FAN_COUNT > 0
   int fanSpeeds[FAN_COUNT] = { 0 };
@@ -458,11 +462,11 @@ static uint8_t target_extruder;
   #define TOWER_2 Y_AXIS
   #define TOWER_3 Z_AXIS
 
-  float delta[3];
-  float cartesian_position[3] = { 0 };
+  float delta[ABC];
+  float cartesian_position[XYZ] = { 0 };
   #define SIN_60 0.8660254037844386
   #define COS_60 0.5
-  float endstop_adj[3] = { 0 };
+  float endstop_adj[ABC] = { 0 };
   // these are the default values, can be overriden with M665
   float delta_radius = DELTA_RADIUS;
   float delta_tower1_x = -SIN_60 * (delta_radius + DELTA_RADIUS_TRIM_TOWER_1); // front left tower
@@ -491,8 +495,8 @@ static uint8_t target_extruder;
 
 #if ENABLED(SCARA)
   float delta_segments_per_second = SCARA_SEGMENTS_PER_SECOND;
-  float delta[3];
-  float axis_scaling[3] = { 1, 1, 1 };    // Build size scaling, default to 1
+  float delta[ABC];
+  float axis_scaling[ABC] = { 1, 1, 1 };    // Build size scaling, default to 1
 #endif
 
 #if ENABLED(FILAMENT_WIDTH_SENSOR)
@@ -1391,8 +1395,7 @@ bool get_target_extruder_from_command(int code) {
       SERIAL_ECHO_START;
       SERIAL_CHAR('M');
       SERIAL_ECHO(code);
-      SERIAL_ECHOPAIR(" " MSG_INVALID_EXTRUDER " ", code_value_byte());
-      SERIAL_EOL;
+      SERIAL_ECHOLNPAIR(" " MSG_INVALID_EXTRUDER " ", code_value_byte());
       return true;
     }
     target_extruder = code_value_byte();
@@ -1411,7 +1414,7 @@ DEFINE_PGM_READ_ANY(float,       float);
 DEFINE_PGM_READ_ANY(signed char, byte);
 
 #define XYZ_CONSTS_FROM_CONFIG(type, array, CONFIG) \
-  static const PROGMEM type array##_P[3] =        \
+  static const PROGMEM type array##_P[XYZ] =        \
       { X_##CONFIG, Y_##CONFIG, Z_##CONFIG };     \
   static inline type array(int axis)          \
   { return pgm_read_any(&array##_P[axis]); }
@@ -1470,28 +1473,28 @@ XYZ_CONSTS_FROM_CONFIG(signed char, home_dir, HOME_DIR);
  * the software endstop positions must be refreshed to remain
  * at the same positions relative to the machine.
  */
-static void update_software_endstops(AxisEnum axis) {
+void update_software_endstops(AxisEnum axis) {
   float offs = LOGICAL_POSITION(0, axis);
 
   #if ENABLED(DUAL_X_CARRIAGE)
     if (axis == X_AXIS) {
       float dual_max_x = max(hotend_offset[X_AXIS][1], X2_MAX_POS);
       if (active_extruder != 0) {
-        sw_endstop_min[X_AXIS] = X2_MIN_POS + offs;
-        sw_endstop_max[X_AXIS] = dual_max_x + offs;
+        soft_endstop_min[X_AXIS] = X2_MIN_POS + offs;
+        soft_endstop_max[X_AXIS] = dual_max_x + offs;
         return;
       }
       else if (dual_x_carriage_mode == DXC_DUPLICATION_MODE) {
-        sw_endstop_min[X_AXIS] = base_min_pos(X_AXIS) + offs;
-        sw_endstop_max[X_AXIS] = min(base_max_pos(X_AXIS), dual_max_x - duplicate_extruder_x_offset) + offs;
+        soft_endstop_min[X_AXIS] = base_min_pos(X_AXIS) + offs;
+        soft_endstop_max[X_AXIS] = min(base_max_pos(X_AXIS), dual_max_x - duplicate_extruder_x_offset) + offs;
         return;
       }
     }
     else
   #endif
   {
-    sw_endstop_min[axis] = base_min_pos(axis) + offs;
-    sw_endstop_max[axis] = base_max_pos(axis) + offs;
+    soft_endstop_min[axis] = base_min_pos(axis) + offs;
+    soft_endstop_max[axis] = base_max_pos(axis) + offs;
   }
 
   #if ENABLED(DEBUG_LEVELING_FEATURE)
@@ -1499,16 +1502,14 @@ static void update_software_endstops(AxisEnum axis) {
       SERIAL_ECHOPAIR("For ", axis_codes[axis]);
       SERIAL_ECHOPAIR(" axis:\n home_offset = ", home_offset[axis]);
       SERIAL_ECHOPAIR("\n position_shift = ", position_shift[axis]);
-      SERIAL_ECHOPAIR("\n sw_endstop_min = ", sw_endstop_min[axis]);
-      SERIAL_ECHOPAIR("\n sw_endstop_max = ", sw_endstop_max[axis]);
-      SERIAL_EOL;
+      SERIAL_ECHOPAIR("\n soft_endstop_min = ", soft_endstop_min[axis]);
+      SERIAL_ECHOLNPAIR("\n soft_endstop_max = ", soft_endstop_max[axis]);
     }
   #endif
 
   #if ENABLED(DELTA)
-    if (axis == Z_AXIS) {
-      delta_clip_start_height = sw_endstop_max[axis] - delta_safe_distance_from_top();
-    }
+    if (axis == Z_AXIS)
+      delta_clip_start_height = soft_endstop_max[axis] - delta_safe_distance_from_top();
   #endif
 
 }
@@ -1530,7 +1531,7 @@ static void set_home_offset(AxisEnum axis, float v) {
 static void set_axis_is_at_home(AxisEnum axis) {
   #if ENABLED(DEBUG_LEVELING_FEATURE)
     if (DEBUGGING(LEVELING)) {
-      SERIAL_ECHOPAIR(">>> set_axis_is_at_home(", axis);
+      SERIAL_ECHOPAIR(">>> set_axis_is_at_home(", axis_codes[axis]);
       SERIAL_ECHOLNPGM(")");
     }
   #endif
@@ -1552,7 +1553,7 @@ static void set_axis_is_at_home(AxisEnum axis) {
 
     if (axis == X_AXIS || axis == Y_AXIS) {
 
-      float homeposition[3];
+      float homeposition[XYZ];
       LOOP_XYZ(i) homeposition[i] = LOGICAL_POSITION(base_home_pos(i), i);
 
       // SERIAL_ECHOPGM("homeposition[x]= "); SERIAL_ECHO(homeposition[0]);
@@ -1574,8 +1575,8 @@ static void set_axis_is_at_home(AxisEnum axis) {
        * SCARA home positions are based on configuration since the actual
        * limits are determined by the inverse kinematic transform.
        */
-      sw_endstop_min[axis] = base_min_pos(axis); // + (delta[axis] - base_home_pos(axis));
-      sw_endstop_max[axis] = base_max_pos(axis); // + (delta[axis] - base_home_pos(axis));
+      soft_endstop_min[axis] = base_min_pos(axis); // + (delta[axis] - base_home_pos(axis));
+      soft_endstop_max[axis] = base_max_pos(axis); // + (delta[axis] - base_home_pos(axis));
     }
     else
   #endif
@@ -1583,30 +1584,49 @@ static void set_axis_is_at_home(AxisEnum axis) {
     current_position[axis] = LOGICAL_POSITION(base_home_pos(axis), axis);
     update_software_endstops(axis);
 
+    if (axis == Z_AXIS) {
+      #if HAS_BED_PROBE && Z_HOME_DIR < 0
+        #if DISABLED(Z_MIN_PROBE_ENDSTOP)
+          current_position[Z_AXIS] -= zprobe_zoffset;
+          #if ENABLED(DEBUG_LEVELING_FEATURE)
+            if (DEBUGGING(LEVELING)) {
+              SERIAL_ECHOLNPGM("*** Z HOMED WITH PROBE (Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN) ***");
+              SERIAL_ECHOLNPAIR("> zprobe_zoffset = ", zprobe_zoffset);
+            }
+          #endif
+        #elif ENABLED(DEBUG_LEVELING_FEATURE)
+          if (DEBUGGING(LEVELING))
+            SERIAL_ECHOLNPGM("*** Z HOMED TO ENDSTOP (Z_MIN_PROBE_ENDSTOP) ***");
+        #endif
+      #endif
+    }
+
     #if HAS_BED_PROBE && Z_HOME_DIR < 0 && DISABLED(Z_MIN_PROBE_ENDSTOP)
       if (axis == Z_AXIS) {
         current_position[Z_AXIS] -= zprobe_zoffset;
         #if ENABLED(DEBUG_LEVELING_FEATURE)
           if (DEBUGGING(LEVELING)) {
-            SERIAL_ECHOPAIR("> zprobe_zoffset = ", zprobe_zoffset);
-            SERIAL_EOL;
+            SERIAL_ECHOLNPGM("*** Z HOMED WITH PROBE (Z_MIN_PROBE_USES_Z_MIN_ENDSTOP_PIN) ***");
+            SERIAL_ECHOLNPAIR("> zprobe_zoffset = ", zprobe_zoffset);
           }
         #endif
       }
+    #elif HAS_BED_PROBE && Z_HOME_DIR < 0 && ENABLED(DEBUG_LEVELING_FEATURE)
+      if (DEBUGGING(LEVELING))
+        SERIAL_ECHOLNPGM("*** Z HOMED TO ENDSTOP (Z_MIN_PROBE_ENDSTOP) ***");
     #endif
 
     #if ENABLED(DEBUG_LEVELING_FEATURE)
       if (DEBUGGING(LEVELING)) {
         SERIAL_ECHOPAIR("> home_offset[", axis_codes[axis]);
-        SERIAL_ECHOPAIR("] = ", home_offset[axis]);
-        SERIAL_EOL;
+        SERIAL_ECHOLNPAIR("] = ", home_offset[axis]);
         DEBUG_POS("", current_position);
       }
     #endif
   }
   #if ENABLED(DEBUG_LEVELING_FEATURE)
     if (DEBUGGING(LEVELING)) {
-      SERIAL_ECHOPAIR("<<< set_axis_is_at_home(", axis);
+      SERIAL_ECHOPAIR("<<< set_axis_is_at_home(", axis_codes[axis]);
       SERIAL_ECHOLNPGM(")");
     }
   #endif
@@ -1636,15 +1656,6 @@ inline void line_to_current_position() {
 
 inline void line_to_z(float zPosition) {
   planner.buffer_line(current_position[X_AXIS], current_position[Y_AXIS], zPosition, current_position[E_AXIS], feedrate_mm_s, active_extruder);
-}
-
-inline void line_to_axis_pos(AxisEnum axis, float where, float fr_mm_s = 0.0) {
-  float old_feedrate_mm_s = feedrate_mm_s;
-  current_position[axis] = where;
-  feedrate_mm_s = (fr_mm_s != 0.0) ? fr_mm_s : homing_feedrate_mm_s[axis];
-  planner.buffer_line(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], feedrate_mm_s, active_extruder);
-  stepper.synchronize();
-  feedrate_mm_s = old_feedrate_mm_s;
 }
 
 //
@@ -2060,8 +2071,7 @@ static void clean_up_after_endstop_or_probe_move() {
     #if ENABLED(DEBUG_LEVELING_FEATURE)
       if (DEBUGGING(LEVELING)) {
         DEBUG_POS("set_probe_deployed", current_position);
-        SERIAL_ECHOPAIR("deploy: ", deploy);
-        SERIAL_EOL;
+        SERIAL_ECHOLNPAIR("deploy: ", deploy);
       }
     #endif
 
@@ -2127,9 +2137,35 @@ static void clean_up_after_endstop_or_probe_move() {
     return false;
   }
 
+  static void do_probe_move(float z, float fr_mm_m) {
+    #if ENABLED(DEBUG_LEVELING_FEATURE)
+      if (DEBUGGING(LEVELING)) DEBUG_POS(">>> do_probe_move", current_position);
+    #endif
+
+    // Move down until probe triggered
+    do_blocking_move_to_z(LOGICAL_Z_POSITION(z), MMM_TO_MMS(fr_mm_m));
+
+    // Clear endstop flags
+    endstops.hit_on_purpose();
+
+    // Get Z where the steppers were interrupted
+    set_current_from_steppers_for_axis(Z_AXIS);
+
+    // Tell the planner where we actually are
+    SYNC_PLAN_POSITION_KINEMATIC();
+
+    #if ENABLED(DEBUG_LEVELING_FEATURE)
+      if (DEBUGGING(LEVELING)) DEBUG_POS("<<< do_probe_move", current_position);
+    #endif
+  }
+
   // Do a single Z probe and return with current_position[Z_AXIS]
   // at the height where the probe triggered.
   static float run_z_probe() {
+
+    #if ENABLED(DEBUG_LEVELING_FEATURE)
+      if (DEBUGGING(LEVELING)) DEBUG_POS(">>> run_z_probe", current_position);
+    #endif
 
     // Prevent stepper_inactive_time from running out and EXTRUDER_RUNOUT_PREVENT from extruding
     refresh_cmd_timeout();
@@ -2139,26 +2175,27 @@ static void clean_up_after_endstop_or_probe_move() {
     #endif
 
     #if ENABLED(PROBE_DOUBLE_TOUCH)
-      do_blocking_move_to_z(-(Z_MAX_LENGTH + 10), MMM_TO_MMS(Z_PROBE_SPEED_FAST));
-      endstops.hit_on_purpose();
-      set_current_from_steppers_for_axis(Z_AXIS);
-      SYNC_PLAN_POSITION_KINEMATIC();
 
-      // move up the retract distance
+      // Do a first probe at the fast speed
+      do_probe_move(-(Z_MAX_LENGTH) - 10, Z_PROBE_SPEED_FAST);
+
+      // move up by the bump distance
       do_blocking_move_to_z(current_position[Z_AXIS] + home_bump_mm(Z_AXIS), MMM_TO_MMS(Z_PROBE_SPEED_FAST));
+
     #else
+
       // move fast, close to the bed
-      do_blocking_move_to_z(home_bump_mm(Z_AXIS), MMM_TO_MMS(Z_PROBE_SPEED_FAST));
+      float z = LOGICAL_Z_POSITION(home_bump_mm(Z_AXIS));
+      if (zprobe_zoffset < 0) z -= zprobe_zoffset;
+      do_blocking_move_to_z(z, MMM_TO_MMS(Z_PROBE_SPEED_FAST));
+
     #endif
 
     // move down slowly to find bed
-    do_blocking_move_to_z(current_position[Z_AXIS] -2.0*home_bump_mm(Z_AXIS), MMM_TO_MMS(Z_PROBE_SPEED_SLOW));
-    endstops.hit_on_purpose();
-    set_current_from_steppers_for_axis(Z_AXIS);
-    SYNC_PLAN_POSITION_KINEMATIC();
+    do_probe_move(-10, Z_PROBE_SPEED_SLOW);
 
     #if ENABLED(DEBUG_LEVELING_FEATURE)
-      if (DEBUGGING(LEVELING)) DEBUG_POS("run_z_probe", current_position);
+      if (DEBUGGING(LEVELING)) DEBUG_POS("<<< run_z_probe", current_position);
     #endif
 
     return current_position[Z_AXIS];
@@ -2393,6 +2430,15 @@ static void clean_up_after_endstop_or_probe_move() {
  * Home an individual axis
  */
 
+static void do_homing_move(AxisEnum axis, float where, float fr_mm_s = 0.0) {
+  float old_feedrate_mm_s = feedrate_mm_s;
+  current_position[axis] = where;
+  feedrate_mm_s = (fr_mm_s != 0.0) ? fr_mm_s : homing_feedrate_mm_s[axis];
+  planner.buffer_line(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], feedrate_mm_s, active_extruder);
+  stepper.synchronize();
+  feedrate_mm_s = old_feedrate_mm_s;
+}
+
 #define HOMEAXIS(LETTER) homeaxis(LETTER##_AXIS)
 
 static void homeaxis(AxisEnum axis) {
@@ -2403,7 +2449,7 @@ static void homeaxis(AxisEnum axis) {
 
   #if ENABLED(DEBUG_LEVELING_FEATURE)
     if (DEBUGGING(LEVELING)) {
-      SERIAL_ECHOPAIR(">>> homeaxis(", axis);
+      SERIAL_ECHOPAIR(">>> homeaxis(", axis_codes[axis]);
       SERIAL_ECHOLNPGM(")");
     }
   #endif
@@ -2415,8 +2461,8 @@ static void homeaxis(AxisEnum axis) {
     home_dir(axis);
 
   // Homing Z towards the bed? Deploy the Z probe or endstop.
-  #if HAS_BED_PROBE && DISABLED(Z_MIN_PROBE_ENDSTOP)
-    if (axis == Z_AXIS && axis_home_dir < 0) {
+  #if HAS_BED_PROBE && Z_HOME_DIR < 0 && DISABLED(Z_MIN_PROBE_ENDSTOP)
+    if (axis == Z_AXIS) {
       #if ENABLED(DEBUG_LEVELING_FEATURE)
         if (DEBUGGING(LEVELING)) SERIAL_ECHOPGM("> ");
       #endif
@@ -2434,17 +2480,17 @@ static void homeaxis(AxisEnum axis) {
   #endif
 
   // Move towards the endstop until an endstop is triggered
-  line_to_axis_pos(axis, 1.5 * max_length(axis) * axis_home_dir);
+  do_homing_move(axis, 1.5 * max_length(axis) * axis_home_dir);
 
   // Set the axis position as setup for the move
   current_position[axis] = 0;
   sync_plan_position();
 
   // Move away from the endstop by the axis HOME_BUMP_MM
-  line_to_axis_pos(axis, -home_bump_mm(axis) * axis_home_dir);
+  do_homing_move(axis, -home_bump_mm(axis) * axis_home_dir);
 
   // Move slowly towards the endstop until triggered
-  line_to_axis_pos(axis, 2 * home_bump_mm(axis) * axis_home_dir, get_homing_bump_feedrate(axis));
+  do_homing_move(axis, 2 * home_bump_mm(axis) * axis_home_dir, get_homing_bump_feedrate(axis));
 
   // reset current_position to 0 to reflect hitting endpoint
   current_position[axis] = 0;
@@ -2468,7 +2514,7 @@ static void homeaxis(AxisEnum axis) {
       if (lockZ1) stepper.set_z_lock(true); else stepper.set_z2_lock(true);
 
       // Move to the adjusted endstop height
-      line_to_axis_pos(axis, adj);
+      do_homing_move(axis, adj);
 
       if (lockZ1) stepper.set_z_lock(false); else stepper.set_z2_lock(false);
       stepper.set_homing_flag(false);
@@ -2477,14 +2523,14 @@ static void homeaxis(AxisEnum axis) {
 
   #if ENABLED(DELTA)
     // retrace by the amount specified in endstop_adj
-    if (endstop_adj[axis] * axis_home_dir < 0) {
+    if (endstop_adj[axis] * Z_HOME_DIR < 0) {
       #if ENABLED(DEBUG_LEVELING_FEATURE)
         if (DEBUGGING(LEVELING)) {
           SERIAL_ECHOPAIR("> endstop_adj = ", endstop_adj[axis]);
           DEBUG_POS("", current_position);
         }
       #endif
-      line_to_axis_pos(axis, endstop_adj[axis]);
+      do_homing_move(axis, endstop_adj[axis]);
     }
   #endif
 
@@ -2503,8 +2549,8 @@ static void homeaxis(AxisEnum axis) {
   axis_homed[axis] = true;
 
   // Put away the Z probe
-  #if HAS_BED_PROBE && DISABLED(Z_MIN_PROBE_ENDSTOP)
-    if (axis == Z_AXIS && axis_home_dir < 0) {
+  #if HAS_BED_PROBE && Z_HOME_DIR < 0 && DISABLED(Z_MIN_PROBE_ENDSTOP)
+    if (axis == Z_AXIS) {
       #if ENABLED(DEBUG_LEVELING_FEATURE)
         if (DEBUGGING(LEVELING)) SERIAL_ECHOPGM("> ");
       #endif
@@ -2514,11 +2560,11 @@ static void homeaxis(AxisEnum axis) {
 
   #if ENABLED(DEBUG_LEVELING_FEATURE)
     if (DEBUGGING(LEVELING)) {
-      SERIAL_ECHOPAIR("<<< homeaxis(", axis);
+      SERIAL_ECHOPAIR("<<< homeaxis(", axis_codes[axis]);
       SERIAL_ECHOLNPGM(")");
     }
   #endif
-}
+} // homeaxis()
 
 #if ENABLED(FWRETRACT)
 
@@ -2999,10 +3045,8 @@ inline void gcode_G28() {
         if (destination[Z_AXIS] > current_position[Z_AXIS]) {
 
           #if ENABLED(DEBUG_LEVELING_FEATURE)
-            if (DEBUGGING(LEVELING)) {
-              SERIAL_ECHOPAIR("Raise Z (before homing) to ", destination[Z_AXIS]);
-              SERIAL_EOL;
-            }
+            if (DEBUGGING(LEVELING))
+              SERIAL_ECHOLNPAIR("Raise Z (before homing) to ", destination[Z_AXIS]);
           #endif
 
           do_blocking_move_to_z(destination[Z_AXIS]);
@@ -3296,7 +3340,7 @@ inline void gcode_G28() {
     switch (state) {
       case MeshReport:
         if (mbl.has_mesh()) {
-          SERIAL_PROTOCOLPAIR("State: ", mbl.active() ? "On" : "Off");
+          SERIAL_PROTOCOLPAIR("State: ", mbl.active() ? MSG_ON : MSG_OFF);
           SERIAL_PROTOCOLLNPGM("\nNum X,Y: " STRINGIFY(MESH_NUM_X_POINTS) "," STRINGIFY(MESH_NUM_Y_POINTS));
           SERIAL_PROTOCOLLNPGM("Z search height: " STRINGIFY(MESH_HOME_SEARCH_Z));
           SERIAL_PROTOCOLPGM("Z offset: "); SERIAL_PROTOCOL_F(mbl.z_offset, 5);
@@ -3475,7 +3519,7 @@ inline void gcode_G28() {
 
     int verbose_level = code_seen('V') ? code_value_int() : 1;
     if (verbose_level < 0 || verbose_level > 4) {
-      SERIAL_ECHOLNPGM("?(V)erbose Level is implausible (0-4).");
+      SERIAL_PROTOCOLLNPGM("?(V)erbose Level is implausible (0-4).");
       return;
     }
 
@@ -3587,12 +3631,12 @@ inline void gcode_G28() {
     #if ENABLED(AUTO_BED_LEVELING_GRID)
 
       // probe at the points of a lattice grid
-      const int xGridSpacing = (right_probe_bed_position - left_probe_bed_position) / (auto_bed_leveling_grid_points - 1),
-                yGridSpacing = (back_probe_bed_position - front_probe_bed_position) / (auto_bed_leveling_grid_points - 1);
+      const float xGridSpacing = (right_probe_bed_position - left_probe_bed_position) / (auto_bed_leveling_grid_points - 1),
+                  yGridSpacing = (back_probe_bed_position - front_probe_bed_position) / (auto_bed_leveling_grid_points - 1);
 
       #if ENABLED(DELTA)
-        delta_grid_spacing[0] = xGridSpacing;
-        delta_grid_spacing[1] = yGridSpacing;
+        delta_grid_spacing[X_AXIS] = xGridSpacing;
+        delta_grid_spacing[Y_AXIS] = yGridSpacing;
         float zoffset = zprobe_zoffset;
         if (code_seen('Z')) zoffset += code_value_axis_units(Z_AXIS);
       #else // !DELTA
@@ -3614,10 +3658,11 @@ inline void gcode_G28() {
       #endif // !DELTA
 
       int probePointCounter = 0;
-      bool zig = (auto_bed_leveling_grid_points & 1) ? true : false; //always end at [RIGHT_PROBE_BED_POSITION, BACK_PROBE_BED_POSITION]
+      bool zig = auto_bed_leveling_grid_points & 1; //always end at [RIGHT_PROBE_BED_POSITION, BACK_PROBE_BED_POSITION]
 
       for (int yCount = 0; yCount < auto_bed_leveling_grid_points; yCount++) {
-        double yProbe = front_probe_bed_position + yGridSpacing * yCount;
+        float yBase = front_probe_bed_position + yGridSpacing * yCount,
+              yProbe = floor(yBase + (yBase < 0 ? 0 : 0.5));
         int xStart, xStop, xInc;
 
         if (zig) {
@@ -3634,13 +3679,13 @@ inline void gcode_G28() {
         zig = !zig;
 
         for (int xCount = xStart; xCount != xStop; xCount += xInc) {
-          double xProbe = left_probe_bed_position + xGridSpacing * xCount;
+          float xBase = left_probe_bed_position + xGridSpacing * xCount,
+                xProbe = floor(xBase + (xBase < 0 ? 0 : 0.5));
 
           #if ENABLED(DELTA)
-            // Avoid probing the corners (outside the round or hexagon print surface) on a delta printer.
-            float distance_from_center = HYPOT(xProbe, yProbe);
-            if (distance_from_center > DELTA_PROBEABLE_RADIUS) continue;
-          #endif //DELTA
+            // Avoid probing outside the round or hexagonal area of a delta printer
+            if (sq(xProbe) + sq(yProbe) > sq(DELTA_PROBEABLE_RADIUS) + 0.1) continue;
+          #endif
 
           float measured_z = probe_pt(xProbe, yProbe, stow_probe_after_each, verbose_level);
 
@@ -3811,8 +3856,7 @@ inline void gcode_G28() {
         #if ENABLED(DEBUG_LEVELING_FEATURE)
           if (DEBUGGING(LEVELING)) {
             SERIAL_ECHOPAIR("> BEFORE apply_rotation_xyz > stepper_z = ", stepper_z);
-            SERIAL_ECHOPAIR(" ... z_tmp  = ", z_tmp);
-            SERIAL_EOL;
+            SERIAL_ECHOLNPAIR(" ... z_tmp  = ", z_tmp);
           }
         #endif
 
@@ -3820,10 +3864,8 @@ inline void gcode_G28() {
         apply_rotation_xyz(planner.bed_level_matrix, x_tmp, y_tmp, z_tmp);
 
         #if ENABLED(DEBUG_LEVELING_FEATURE)
-          if (DEBUGGING(LEVELING)) {
-            SERIAL_ECHOPAIR("> AFTER apply_rotation_xyz > z_tmp  = ", z_tmp);
-            SERIAL_EOL;
-          }
+          if (DEBUGGING(LEVELING))
+            SERIAL_ECHOLNPAIR("> AFTER apply_rotation_xyz > z_tmp  = ", z_tmp);
         #endif
 
         // Adjust the current Z and send it to the planner.
@@ -4349,8 +4391,7 @@ inline void gcode_M42() {
               Y_current /= 1.25;
               if (verbose_level > 3) {
                 SERIAL_ECHOPAIR("Pulling point towards center:", X_current);
-                SERIAL_ECHOPAIR(", ", Y_current);
-                SERIAL_EOL;
+                SERIAL_ECHOLNPAIR(", ", Y_current);
               }
             }
           #endif
@@ -4358,8 +4399,7 @@ inline void gcode_M42() {
             SERIAL_PROTOCOLPGM("Going to:");
             SERIAL_ECHOPAIR(" X", X_current);
             SERIAL_ECHOPAIR(" Y", Y_current);
-            SERIAL_ECHOPAIR(" Z", current_position[Z_AXIS]);
-            SERIAL_EOL;
+            SERIAL_ECHOLNPAIR(" Z", current_position[Z_AXIS]);
           }
           do_blocking_move_to_xy(X_current, Y_current);
         } // n_legs loop
@@ -4917,8 +4957,7 @@ inline void gcode_M111() {
     }
     else {
       SERIAL_ECHO_START;
-      SERIAL_ECHOPAIR("M113 S", (unsigned long)host_keepalive_interval);
-      SERIAL_EOL;
+      SERIAL_ECHOLNPAIR("M113 S", (unsigned long)host_keepalive_interval);
     }
   }
 
@@ -5368,23 +5407,19 @@ inline void gcode_M203() {
 inline void gcode_M204() {
   if (code_seen('S')) {  // Kept for legacy compatibility. Should NOT BE USED for new developments.
     planner.travel_acceleration = planner.acceleration = code_value_linear_units();
-    SERIAL_ECHOPAIR("Setting Print and Travel Acceleration: ", planner.acceleration);
-    SERIAL_EOL;
+    SERIAL_ECHOLNPAIR("Setting Print and Travel Acceleration: ", planner.acceleration);
   }
   if (code_seen('P')) {
     planner.acceleration = code_value_linear_units();
-    SERIAL_ECHOPAIR("Setting Print Acceleration: ", planner.acceleration);
-    SERIAL_EOL;
+    SERIAL_ECHOLNPAIR("Setting Print Acceleration: ", planner.acceleration);
   }
   if (code_seen('R')) {
     planner.retract_acceleration = code_value_linear_units();
-    SERIAL_ECHOPAIR("Setting Retract Acceleration: ", planner.retract_acceleration);
-    SERIAL_EOL;
+    SERIAL_ECHOLNPAIR("Setting Retract Acceleration: ", planner.retract_acceleration);
   }
   if (code_seen('T')) {
     planner.travel_acceleration = code_value_linear_units();
-    SERIAL_ECHOPAIR("Setting Travel Acceleration: ", planner.travel_acceleration);
-    SERIAL_EOL;
+    SERIAL_ECHOLNPAIR("Setting Travel Acceleration: ", planner.travel_acceleration);
   }
 }
 
@@ -5460,8 +5495,7 @@ inline void gcode_M206() {
           if (DEBUGGING(LEVELING)) {
             SERIAL_ECHOPGM("endstop_adj[");
             SERIAL_ECHO(axis_codes[i]);
-            SERIAL_ECHOPAIR("] = ", endstop_adj[i]);
-            SERIAL_EOL;
+            SERIAL_ECHOLNPAIR("] = ", endstop_adj[i]);
           }
         #endif
       }
@@ -5480,8 +5514,7 @@ inline void gcode_M206() {
    */
   inline void gcode_M666() {
     if (code_seen('Z')) z_endstop_adj = code_value_axis_units(Z_AXIS);
-    SERIAL_ECHOPAIR("Z Endstop Adjustment set to (mm):", z_endstop_adj);
-    SERIAL_EOL;
+    SERIAL_ECHOLNPAIR("Z Endstop Adjustment set to (mm):", z_endstop_adj);
   }
 
 #endif // !DELTA && Z_DUAL_ENDSTOPS
@@ -5526,23 +5559,38 @@ inline void gcode_M206() {
    */
   inline void gcode_M209() {
     if (code_seen('S')) {
-      int t = code_value_int();
-      switch (t) {
-        case 0:
-          autoretract_enabled = false;
-          break;
-        case 1:
-          autoretract_enabled = true;
-          break;
-        default:
-          unknown_command_error();
-          return;
-      }
+      autoretract_enabled = code_value_bool();
       for (int i = 0; i < EXTRUDERS; i++) retracted[i] = false;
     }
   }
 
 #endif // FWRETRACT
+
+/**
+ * M211: Enable, Disable, and/or Report software endstops
+ *
+ * Usage: M211 S1 to enable, M211 S0 to disable, M211 alone for report
+ */
+inline void gcode_M211() {
+  SERIAL_ECHO_START;
+  #if ENABLED(min_software_endstops) || ENABLED(max_software_endstops)
+    if (code_seen('S')) soft_endstops_enabled = code_value_bool();
+  #endif
+  #if ENABLED(min_software_endstops) || ENABLED(max_software_endstops)
+    SERIAL_ECHOPGM(MSG_SOFT_ENDSTOPS ": ");
+    serialprintPGM(soft_endstops_enabled ? PSTR(MSG_ON) : PSTR(MSG_OFF));
+  #else
+    SERIAL_ECHOPGM(MSG_SOFT_ENDSTOPS ": " MSG_OFF);
+  #endif
+  SERIAL_ECHOPGM("  " MSG_SOFT_MIN ": ");
+  SERIAL_ECHOPAIR(    MSG_X, soft_endstop_min[X_AXIS]);
+  SERIAL_ECHOPAIR(" " MSG_Y, soft_endstop_min[Y_AXIS]);
+  SERIAL_ECHOPAIR(" " MSG_Z, soft_endstop_min[Z_AXIS]);
+  SERIAL_ECHOPGM("  " MSG_SOFT_MAX ": ");
+  SERIAL_ECHOPAIR(    MSG_X, soft_endstop_max[X_AXIS]);
+  SERIAL_ECHOPAIR(" " MSG_Y, soft_endstop_max[Y_AXIS]);
+  SERIAL_ECHOLNPAIR(" " MSG_Z, soft_endstop_max[Z_AXIS]);
+}
 
 #if HOTENDS > 1
 
@@ -5816,7 +5864,7 @@ inline void gcode_M226() {
 
 #endif // HAS_LCD_CONTRAST
 
-#if ENABLED(PREVENT_DANGEROUS_EXTRUDE)
+#if ENABLED(PREVENT_COLD_EXTRUSION)
 
   /**
    * M302: Allow cold extrudes, or set the minimum extrude temperature
@@ -5851,7 +5899,7 @@ inline void gcode_M226() {
     }
   }
 
-#endif // PREVENT_DANGEROUS_EXTRUDE
+#endif // PREVENT_COLD_EXTRUSION
 
 /**
  * M303: PID relay autotune
@@ -6147,7 +6195,7 @@ inline void gcode_M428() {
   bool err = false;
   LOOP_XYZ(i) {
     if (axis_homed[i]) {
-      float base = (current_position[i] > (sw_endstop_min[i] + sw_endstop_max[i]) * 0.5) ? base_home_pos(i) : 0,
+      float base = (current_position[i] > (soft_endstop_min[i] + soft_endstop_max[i]) * 0.5) ? base_home_pos(i) : 0,
             diff = current_position[i] - LOGICAL_POSITION(base, i);
       if (diff > -20 && diff < 20) {
         set_home_offset((AxisEnum)i, home_offset[i] - diff);
@@ -6471,8 +6519,7 @@ inline void gcode_M503() {
     stepper.synchronize();
     extruder_duplication_enabled = code_seen('S') && code_value_int() == 2;
     SERIAL_ECHO_START;
-    SERIAL_ECHOPAIR(MSG_DUPLICATION_MODE, extruder_duplication_enabled ? MSG_ON : MSG_OFF);
-    SERIAL_EOL;
+    SERIAL_ECHOLNPAIR(MSG_DUPLICATION_MODE, extruder_duplication_enabled ? MSG_ON : MSG_OFF);
   }
 
 #endif // M605
@@ -6776,8 +6823,7 @@ void tool_change(const uint8_t tmp_extruder, const float fr_mm_s/*=0.0*/, bool n
 
           #if ENABLED(DEBUG_LEVELING_FEATURE)
             if (DEBUGGING(LEVELING)) {
-              SERIAL_ECHOPAIR("Active extruder parked: ", active_extruder_parked ? "yes" : "no");
-              SERIAL_EOL;
+              SERIAL_ECHOLNPAIR("Active extruder parked: ", active_extruder_parked ? "yes" : "no");
               DEBUG_POS("New extruder (parked)", current_position);
             }
           #endif
@@ -6886,10 +6932,8 @@ void tool_change(const uint8_t tmp_extruder, const float fr_mm_s/*=0.0*/, bool n
                       ypos = RAW_CURRENT_POSITION(Y_AXIS);
                 current_position[Z_AXIS] += mbl.get_z(xpos + xydiff[X_AXIS], ypos + xydiff[Y_AXIS]) - mbl.get_z(xpos, ypos);
                 #if ENABLED(DEBUG_LEVELING_FEATURE)
-                  if (DEBUGGING(LEVELING)) {
-                    SERIAL_ECHOPAIR(" after: ", current_position[Z_AXIS]);
-                    SERIAL_EOL;
-                  }
+                  if (DEBUGGING(LEVELING))
+                    SERIAL_ECHOLNPAIR(" after: ", current_position[Z_AXIS]);
                 #endif
               }
 
@@ -7467,6 +7511,10 @@ void process_next_command() {
           break;
       #endif // FWRETRACT
 
+      case 211: // M211 - Enable, Disable, and/or Report software endstops
+        gcode_M211();
+        break;
+
       #if HOTENDS > 1
         case 218: // M218 - Set a tool offset: T<index> X<offset> Y<offset>
           gcode_M218();
@@ -7521,11 +7569,11 @@ void process_next_command() {
           break;
       #endif // HAS_LCD_CONTRAST
 
-      #if ENABLED(PREVENT_DANGEROUS_EXTRUDE)
+      #if ENABLED(PREVENT_COLD_EXTRUSION)
         case 302: // allow cold extrudes, or set the minimum extrude temperature
           gcode_M302();
           break;
-      #endif // PREVENT_DANGEROUS_EXTRUDE
+      #endif // PREVENT_COLD_EXTRUSION
 
       case 303: // M303 PID autotune
         gcode_M303();
@@ -7721,18 +7769,22 @@ void ok_to_send() {
   SERIAL_EOL;
 }
 
-void clamp_to_software_endstops(float target[3]) {
-  if (min_software_endstops) {
-    NOLESS(target[X_AXIS], sw_endstop_min[X_AXIS]);
-    NOLESS(target[Y_AXIS], sw_endstop_min[Y_AXIS]);
-    NOLESS(target[Z_AXIS], sw_endstop_min[Z_AXIS]);
+#if ENABLED(min_software_endstops) || ENABLED(max_software_endstops)
+
+  void clamp_to_software_endstops(float target[XYZ]) {
+    #if ENABLED(min_software_endstops)
+      NOLESS(target[X_AXIS], soft_endstop_min[X_AXIS]);
+      NOLESS(target[Y_AXIS], soft_endstop_min[Y_AXIS]);
+      NOLESS(target[Z_AXIS], soft_endstop_min[Z_AXIS]);
+    #endif
+    #if ENABLED(max_software_endstops)
+      NOMORE(target[X_AXIS], soft_endstop_max[X_AXIS]);
+      NOMORE(target[Y_AXIS], soft_endstop_max[Y_AXIS]);
+      NOMORE(target[Z_AXIS], soft_endstop_max[Z_AXIS]);
+    #endif
   }
-  if (max_software_endstops) {
-    NOMORE(target[X_AXIS], sw_endstop_max[X_AXIS]);
-    NOMORE(target[Y_AXIS], sw_endstop_max[Y_AXIS]);
-    NOMORE(target[Z_AXIS], sw_endstop_max[Z_AXIS]);
-  }
-}
+
+#endif
 
 #if ENABLED(DELTA)
 
@@ -7748,9 +7800,9 @@ void clamp_to_software_endstops(float target[3]) {
     delta_diagonal_rod_2_tower_3 = sq(diagonal_rod + delta_diagonal_rod_trim_tower_3);
   }
 
-  void inverse_kinematics(const float in_cartesian[3]) {
+  void inverse_kinematics(const float in_cartesian[XYZ]) {
 
-    const float cartesian[3] = {
+    const float cartesian[XYZ] = {
       RAW_X_POSITION(in_cartesian[X_AXIS]),
       RAW_Y_POSITION(in_cartesian[Y_AXIS]),
       RAW_Z_POSITION(in_cartesian[Z_AXIS])
@@ -7780,7 +7832,7 @@ void clamp_to_software_endstops(float target[3]) {
   }
 
   float delta_safe_distance_from_top() {
-    float cartesian[3] = {
+    float cartesian[XYZ] = {
       LOGICAL_X_POSITION(0),
       LOGICAL_Y_POSITION(0),
       LOGICAL_Z_POSITION(0)
@@ -7861,26 +7913,26 @@ void clamp_to_software_endstops(float target[3]) {
     cartesian_position[Z_AXIS] = z1             + ex[2]*Xnew + ey[2]*Ynew - ez[2]*Znew;
   };
 
-  void forward_kinematics_DELTA(float point[3]) {
-    forward_kinematics_DELTA(point[X_AXIS], point[Y_AXIS], point[Z_AXIS]);
+  void forward_kinematics_DELTA(float point[ABC]) {
+    forward_kinematics_DELTA(point[A_AXIS], point[B_AXIS], point[C_AXIS]);
   }
 
   void set_cartesian_from_steppers() {
-    forward_kinematics_DELTA(stepper.get_axis_position_mm(X_AXIS),
-                             stepper.get_axis_position_mm(Y_AXIS),
-                             stepper.get_axis_position_mm(Z_AXIS));
+    forward_kinematics_DELTA(stepper.get_axis_position_mm(A_AXIS),
+                             stepper.get_axis_position_mm(B_AXIS),
+                             stepper.get_axis_position_mm(C_AXIS));
   }
 
   #if ENABLED(AUTO_BED_LEVELING_FEATURE)
 
     // Adjust print surface height by linear interpolation over the bed_level array.
-    void adjust_delta(float cartesian[3]) {
-      if (delta_grid_spacing[0] == 0 || delta_grid_spacing[1] == 0) return; // G29 not done!
+    void adjust_delta(float cartesian[XYZ]) {
+      if (delta_grid_spacing[X_AXIS] == 0 || delta_grid_spacing[Y_AXIS] == 0) return; // G29 not done!
 
       int half = (AUTO_BED_LEVELING_GRID_POINTS - 1) / 2;
       float h1 = 0.001 - half, h2 = half - 0.001,
-            grid_x = max(h1, min(h2, RAW_X_POSITION(cartesian[X_AXIS]) / delta_grid_spacing[0])),
-            grid_y = max(h1, min(h2, RAW_Y_POSITION(cartesian[Y_AXIS]) / delta_grid_spacing[1]));
+            grid_x = max(h1, min(h2, RAW_X_POSITION(cartesian[X_AXIS]) / delta_grid_spacing[X_AXIS])),
+            grid_y = max(h1, min(h2, RAW_Y_POSITION(cartesian[Y_AXIS]) / delta_grid_spacing[Y_AXIS]));
       int floor_x = floor(grid_x), floor_y = floor(grid_y);
       float ratio_x = grid_x - floor_x, ratio_y = grid_y - floor_y,
             z1 = bed_level[floor_x + half][floor_y + half],
@@ -8093,7 +8145,7 @@ void mesh_line_to_destination(float fr_mm_s, uint8_t x_splits = 0xff, uint8_t y_
 
 #endif // !DELTA && !SCARA
 
-#if ENABLED(PREVENT_DANGEROUS_EXTRUDE)
+#if ENABLED(PREVENT_COLD_EXTRUSION)
 
   inline void prevent_dangerous_extrude(float& curr_e, float& dest_e) {
     if (DEBUGGING(DRYRUN)) return;
@@ -8114,7 +8166,7 @@ void mesh_line_to_destination(float fr_mm_s, uint8_t x_splits = 0xff, uint8_t y_
     }
   }
 
-#endif // PREVENT_DANGEROUS_EXTRUDE
+#endif // PREVENT_COLD_EXTRUSION
 
 /**
  * Prepare a single move and get ready for the next one
@@ -8126,7 +8178,7 @@ void prepare_move_to_destination() {
   clamp_to_software_endstops(destination);
   refresh_cmd_timeout();
 
-  #if ENABLED(PREVENT_DANGEROUS_EXTRUDE)
+  #if ENABLED(PREVENT_COLD_EXTRUSION)
     prevent_dangerous_extrude(current_position[E_AXIS], destination[E_AXIS]);
   #endif
 
@@ -8347,8 +8399,8 @@ void prepare_move_to_destination() {
 
 #if ENABLED(SCARA)
 
-  void forward_kinematics_SCARA(float f_scara[3]) {
-    // Perform forward kinematics, and place results in delta[3]
+  void forward_kinematics_SCARA(float f_scara[ABC]) {
+    // Perform forward kinematics, and place results in delta[]
     // The maths and first version has been done by QHARLEY . Integrated into masterbranch 06/2014 and slightly restructured by Joachim Cerny in June 2014
 
     float x_sin, x_cos, y_sin, y_cos;
@@ -8373,9 +8425,9 @@ void prepare_move_to_destination() {
     //SERIAL_ECHOPGM(" delta[Y_AXIS]="); SERIAL_ECHOLN(delta[Y_AXIS]);
   }
 
-  void inverse_kinematics(const float cartesian[3]) {
+  void inverse_kinematics(const float cartesian[XYZ]) {
     // Inverse kinematics.
-    // Perform SCARA IK and place results in delta[3].
+    // Perform SCARA IK and place results in delta[].
     // The maths and first version were done by QHARLEY.
     // Integrated, tweaked by Joachim Cerny in June 2014.
 
@@ -8433,13 +8485,10 @@ void prepare_move_to_destination() {
   void handle_status_leds(void) {
     if (ELAPSED(millis(), next_status_led_update_ms)) {
       next_status_led_update_ms += 500; // Update every 0.5s
-      float max_temp =
-        #if HAS_TEMP_BED
-          MAX3(max_temp, thermalManager.degTargetBed(), thermalManager.degBed())
-        #else
-          0.0
-        #endif
-      ;
+      float max_temp = 0.0;
+      #if HAS_TEMP_BED
+        max_temp = MAX3(max_temp, thermalManager.degTargetBed(), thermalManager.degBed());
+      #endif
       HOTEND_LOOP() {
         max_temp = MAX3(max_temp, thermalManager.degHotend(e), thermalManager.degTargetHotend(e));
       }
