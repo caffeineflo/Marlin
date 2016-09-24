@@ -496,7 +496,7 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
  * value set here, it may happen instantaneously.
  */
 #define DEFAULT_XYJERK                10.0
-#define DEFAULT_ZJERK                  0.4
+#define DEFAULT_ZJERK                  0.2
 #define DEFAULT_EJERK                  5.0
 
 
