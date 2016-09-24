@@ -36,6 +36,9 @@
   #define CRITICAL_SECTION_END    SREG = _sreg;
 #endif
 
+// Clock speed factor
+#define CYCLES_PER_MICROSECOND (F_CPU / 1000000UL) // 16 or 20
+
 // Remove compiler warning on an unused variable
 #define UNUSED(x) (void) (x)
 
@@ -55,7 +58,8 @@
 #endif
 #define RADIANS(d) ((d)*M_PI/180.0)
 #define DEGREES(r) ((r)*180.0/M_PI)
-#define HYPOT(x,y) sqrt(sq(x)+sq(y))
+#define HYPOT2(x,y) (sq(x)+sq(y))
+#define HYPOT(x,y) sqrt(HYPOT2(x,y))
 
 // Macros to contrain values
 #define NOLESS(v,n) do{ if (v < n) v = n; }while(0)
@@ -123,5 +127,9 @@
 
 #define MAX3(a, b, c)    max(max(a, b), c)
 #define MAX4(a, b, c, d) max(max(max(a, b), c), d)
+
+#define UNEAR_ZERO(x) ((x) < 0.000001)
+#define NEAR_ZERO(x) ((x) > -0.000001 && (x) < 0.000001)
+#define NEAR(x,y) NEAR_ZERO((x)-(y))
 
 #endif //__MACROS_H
