@@ -30,6 +30,10 @@
 #include "configuration_store.h"
 #include "utility.h"
 
+#if HAS_BUZZER && DISABLED(LCD_USE_I2C_BUZZER)
+  #include "buzzer.h"
+#endif
+
 #if ENABLED(BLTOUCH)
   #include "endstops.h"
 #endif
@@ -61,6 +65,11 @@ static void lcd_status_screen();
 millis_t next_lcd_update_ms;
 
 uint8_t lcdDrawUpdate = LCDVIEW_CLEAR_CALL_REDRAW; // Set when the LCD needs to draw, decrements after every draw. Set to 2 in LCD routines so the LCD gets at least 1 full redraw (first redraw is partial)
+
+#if ENABLED(DAC_STEPPER_CURRENT)
+  #include "stepper_dac.h" //was dac_mcp4728.h MarlinMain uses stepper dac for the m-codes
+  uint16_t driverPercent[XYZE];
+#endif
 
 #if ENABLED(ULTIPANEL)
 
@@ -113,6 +122,13 @@ uint8_t lcdDrawUpdate = LCDVIEW_CLEAR_CALL_REDRAW; // Set when the LCD needs to 
   static void lcd_control_temperature_preheat_abs_settings_menu();
   static void lcd_control_motion_menu();
   static void lcd_control_volumetric_menu();
+
+  #if ENABLED(DAC_STEPPER_CURRENT)
+    static void dac_driver_commit();
+    static void dac_driver_getValues();
+    static void lcd_dac_menu();
+    static void lcd_dac_write_eeprom();
+  #endif
 
   #if ENABLED(LCD_INFO_MENU)
     #if ENABLED(PRINTCOUNTER)
@@ -211,7 +227,7 @@ uint8_t lcdDrawUpdate = LCDVIEW_CLEAR_CALL_REDRAW; // Set when the LCD needs to 
     static int8_t _countedItems = 0; \
     int8_t encoderLine = encoderPosition / ENCODER_STEPS_PER_MENU_ITEM; \
     if (_countedItems > 0 && encoderLine >= _countedItems - LIMIT) { \
-      encoderLine = _countedItems - LIMIT; \
+      encoderLine = max(0, _countedItems - LIMIT); \
       encoderPosition = encoderLine * (ENCODER_STEPS_PER_MENU_ITEM); \
     }
 
@@ -549,12 +565,7 @@ void kill_screen(const char* lcd_msg) {
 #if ENABLED(ULTIPANEL)
 
   inline void line_to_current(AxisEnum axis) {
-    #if ENABLED(DELTA)
-      inverse_kinematics(current_position);
-      planner.buffer_line(delta[A_AXIS], delta[B_AXIS], delta[C_AXIS], current_position[E_AXIS], MMM_TO_MMS(manual_feedrate_mm_m[axis]), active_extruder);
-    #else // !DELTA
-      planner.buffer_line(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], MMM_TO_MMS(manual_feedrate_mm_m[axis]), active_extruder);
-    #endif // !DELTA
+    planner.buffer_line_kinematic(current_position, MMM_TO_MMS(manual_feedrate_mm_m[axis]), active_extruder);
   }
 
   #if ENABLED(SDSUPPORT)
@@ -574,7 +585,9 @@ void kill_screen(const char* lcd_msg) {
       clear_command_queue();
       quickstop_stepper();
       print_job_timer.stop();
-      thermalManager.autotempShutdown();
+      #if ENABLED(AUTOTEMP)
+        thermalManager.autotempShutdown();
+      #endif
       wait_for_heatup = false;
       lcd_setstatus(MSG_PRINT_ABORTED, true);
     }
@@ -845,6 +858,31 @@ void kill_screen(const char* lcd_msg) {
 
     END_MENU();
   }
+
+  /**
+   *
+   * "Driver current control" submenu items
+   *
+   */
+  #if ENABLED(DAC_STEPPER_CURRENT)
+    static void dac_driver_getValues() { LOOP_XYZE(i) driverPercent[i] = dac_current_get_percent((AxisEnum)i); }
+
+    static void dac_driver_commit() { dac_current_set_percents(driverPercent); }
+
+    static void dac_driver_eeprom_write() { dac_commit_eeprom(); }
+
+    static void lcd_dac_menu() {
+      dac_driver_getValues();
+      START_MENU();    
+      MENU_ITEM(back, MSG_CONTROL);
+      MENU_ITEM_EDIT_CALLBACK(int3, MSG_X " " MSG_DAC_PERCENT, &driverPercent[X_AXIS], 0, 100, dac_driver_commit);
+      MENU_ITEM_EDIT_CALLBACK(int3, MSG_Y " " MSG_DAC_PERCENT, &driverPercent[Y_AXIS], 0, 100, dac_driver_commit);
+      MENU_ITEM_EDIT_CALLBACK(int3, MSG_Z " " MSG_DAC_PERCENT, &driverPercent[Z_AXIS], 0, 100, dac_driver_commit);
+      MENU_ITEM_EDIT_CALLBACK(int3, MSG_E " " MSG_DAC_PERCENT, &driverPercent[E_AXIS], 0, 100, dac_driver_commit);
+      MENU_ITEM(function, MSG_DAC_EEPROM_WRITE, dac_driver_eeprom_write);
+      END_MENU();
+    }
+  #endif
 
   /**
    *
@@ -1212,7 +1250,7 @@ void kill_screen(const char* lcd_msg) {
     //
     // Level Bed
     //
-    #if ENABLED(AUTO_BED_LEVELING_FEATURE)
+    #if HAS_ABL
       MENU_ITEM(gcode, MSG_LEVEL_BED,
         axis_homed[X_AXIS] && axis_homed[Y_AXIS] ? PSTR("G29") : PSTR("G28\nG29")
       );
@@ -1314,12 +1352,7 @@ void kill_screen(const char* lcd_msg) {
    */
   inline void manage_manual_move() {
     if (manual_move_axis != (int8_t)NO_AXIS && ELAPSED(millis(), manual_move_start_time) && !planner.is_full()) {
-      #if ENABLED(DELTA)
-        inverse_kinematics(current_position);
-        planner.buffer_line(delta[A_AXIS], delta[B_AXIS], delta[C_AXIS], current_position[E_AXIS], MMM_TO_MMS(manual_feedrate_mm_m[manual_move_axis]), manual_move_e_index);
-      #else
-        planner.buffer_line(current_position[X_AXIS], current_position[Y_AXIS], current_position[Z_AXIS], current_position[E_AXIS], MMM_TO_MMS(manual_feedrate_mm_m[manual_move_axis]), manual_move_e_index);
-      #endif
+      planner.buffer_line_kinematic(current_position, MMM_TO_MMS(manual_feedrate_mm_m[manual_move_axis]), manual_move_e_index);
       manual_move_axis = (int8_t)NO_AXIS;
     }
   }
@@ -1529,6 +1562,10 @@ void kill_screen(const char* lcd_msg) {
     #if ENABLED(FWRETRACT)
       MENU_ITEM(submenu, MSG_RETRACT, lcd_control_retract_menu);
     #endif
+    #if ENABLED(DAC_STEPPER_CURRENT)
+      MENU_ITEM(submenu, MSG_DRIVE_STRENGTH, lcd_dac_menu); 
+    #endif
+
     #if ENABLED(EEPROM_SETTINGS)
       MENU_ITEM(function, MSG_STORE_EPROM, Config_StoreSettings);
       MENU_ITEM(function, MSG_LOAD_EPROM, Config_RetrieveSettings);
@@ -1659,7 +1696,7 @@ void kill_screen(const char* lcd_msg) {
     // Bed:
     //
     #if TEMP_SENSOR_BED != 0
-      MENU_MULTIPLIER_ITEM_EDIT(int3, MSG_BED, &thermalManager.target_temperature_bed, 0, BED_MAXTEMP - 15);
+      MENU_MULTIPLIER_ITEM_EDIT_CALLBACK(int3, MSG_BED, &thermalManager.target_temperature_bed, 0, BED_MAXTEMP - 15, watch_temp_callback_bed);
     #endif
 
     //
@@ -1812,13 +1849,14 @@ void kill_screen(const char* lcd_msg) {
       MENU_ITEM_EDIT(float43, MSG_BED_Z, &mbl.z_offset, -1, 1);
     #endif
     MENU_ITEM_EDIT(float5, MSG_ACC, &planner.acceleration, 10, 99000);
-    MENU_ITEM_EDIT(float3, MSG_VXY_JERK, &planner.max_xy_jerk, 1, 990);
+    MENU_ITEM_EDIT(float3, MSG_VX_JERK, &planner.max_jerk[X_AXIS], 1, 990);
+    MENU_ITEM_EDIT(float3, MSG_VY_JERK, &planner.max_jerk[Y_AXIS], 1, 990);
     #if ENABLED(DELTA)
-      MENU_ITEM_EDIT(float3, MSG_VZ_JERK, &planner.max_z_jerk, 1, 990);
+      MENU_ITEM_EDIT(float3, MSG_VZ_JERK, &planner.max_jerk[Z_AXIS], 1, 990);
     #else
-      MENU_ITEM_EDIT(float52, MSG_VZ_JERK, &planner.max_z_jerk, 0.1, 990);
+      MENU_ITEM_EDIT(float52, MSG_VZ_JERK, &planner.max_jerk[Z_AXIS], 0.1, 990);
     #endif
-    MENU_ITEM_EDIT(float3, MSG_VE_JERK, &planner.max_e_jerk, 1, 990);
+    MENU_ITEM_EDIT(float3, MSG_VE_JERK, &planner.max_jerk[E_AXIS], 1, 990);
     MENU_ITEM_EDIT(float3, MSG_VMAX MSG_X, &planner.max_feedrate_mm_s[X_AXIS], 1, 999);
     MENU_ITEM_EDIT(float3, MSG_VMAX MSG_Y, &planner.max_feedrate_mm_s[Y_AXIS], 1, 999);
     MENU_ITEM_EDIT(float3, MSG_VMAX MSG_Z, &planner.max_feedrate_mm_s[Z_AXIS], 1, 999);

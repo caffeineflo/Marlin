@@ -292,7 +292,6 @@
                                   // Set/get with gcode: M301 E[extruder number, 0-2]
   #define PID_FUNCTIONAL_RANGE 10 // If the temperature difference between the target temperature and the actual temperature
                                   // is more than PID_FUNCTIONAL_RANGE then the PID will be shut off and the heater will be set to min/max.
-  #define PID_INTEGRAL_DRIVE_MAX PID_MAX  //limit for the integral term
   #define K1 0.95 //smoothing factor within the PID
 
   // If you are using a pre-configured hotend then you can use one of the value sets by uncommenting it
@@ -338,8 +337,6 @@
 #if ENABLED(PIDTEMPBED)
 
   //#define PID_BED_DEBUG // Sends debug data to the serial port.
-
-  #define PID_BED_INTEGRAL_DRIVE_MAX MAX_BED_POWER //limit for the integral term
 
   //120V 250W silicone heater into 4mm borosilicate (MendelMax 1.5+)
   //from FOPDT model - kp=.39 Tp=405 Tdead=66, Tc set to 79.2, aggressive factor of .15 (vs .1, 1, 10)
@@ -495,7 +492,8 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
  * When changing speed and direction, if the difference is less than the
  * value set here, it may happen instantaneously.
  */
-#define DEFAULT_XYJERK                10.0
+#define DEFAULT_XJERK                 10.0
+#define DEFAULT_YJERK                 10.0
 #define DEFAULT_ZJERK                  0.2
 #define DEFAULT_EJERK                  5.0
 
@@ -510,7 +508,7 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
 // Probes are sensors/switches that are activated / deactivated before/after use.
 //
 // Allen Key Probes, Servo Probes, Z-Sled Probes, FIX_MOUNTED_PROBE, etc.
-// You must activate one of these to use AUTO_BED_LEVELING_FEATURE below.
+// You must activate one of these to use Auto Bed Leveling below.
 //
 // Use M851 to set the Z probe vertical offset from the nozzle. Store with M500.
 //
@@ -732,69 +730,78 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
 #endif  // MESH_BED_LEVELING
 
 //===========================================================================
-//============================ Bed Auto Leveling ============================
+//============================ Auto Bed Leveling ============================
 //===========================================================================
-
 // @section bedlevel
 
-//#define AUTO_BED_LEVELING_FEATURE // Delete the comment to enable (remove // at the start of the line)
+/**
+ * Select one form of Auto Bed Leveling below.
+ *
+ *  If you're also using the Probe for Z Homing, it's
+ *  highly recommended to enable Z_SAFE_HOMING also!
+ *
+ * - 3POINT
+ *   Probe 3 arbitrary points on the bed (that aren't collinear)
+ *   You specify the XY coordinates of all 3 points.
+ *   The result is a single tilted plane. Best for a flat bed.
+ *
+ * - LINEAR
+ *   Probe several points in a grid.
+ *   You specify the rectangle and the density of sample points.
+ *   The result is a single tilted plane. Best for a flat bed.
+ *
+ * - BILINEAR
+ *   Probe several points in a grid.
+ *   You specify the rectangle and the density of sample points.
+ *   The result is a mesh, best for large or uneven beds.
+ */
+//#define AUTO_BED_LEVELING_3POINT
+//#define AUTO_BED_LEVELING_LINEAR
+//#define AUTO_BED_LEVELING_BILINEAR
 
-// Enable this feature to get detailed logging of G28, G29, M48, etc.
-// Logging is off by default. Enable this logging feature with 'M111 S32'.
-// NOTE: Requires a huge amount of PROGMEM.
+/**
+ * Enable detailed logging of G28, G29, M48, etc.
+ * Turn on with the command 'M111 S32'.
+ * NOTE: Requires a lot of PROGMEM!
+ */
 //#define DEBUG_LEVELING_FEATURE
 
-#if ENABLED(AUTO_BED_LEVELING_FEATURE)
+#if ENABLED(AUTO_BED_LEVELING_LINEAR) || ENABLED(AUTO_BED_LEVELING_BILINEAR)
 
-  // There are 2 different ways to specify probing locations:
-  //
-  // - "grid" mode
-  //   Probe several points in a rectangular grid.
-  //   You specify the rectangle and the density of sample points.
-  //   This mode is preferred because there are more measurements.
-  //
-  // - "3-point" mode
-  //   Probe 3 arbitrary points on the bed (that aren't collinear)
-  //   You specify the XY coordinates of all 3 points.
+  // Set the number of grid points per dimension.
+  #define ABL_GRID_POINTS_X 3
+  #define ABL_GRID_POINTS_Y ABL_GRID_POINTS_X
 
-  // Enable this to sample the bed in a grid (least squares solution).
-  // Note: this feature generates 10KB extra code size.
-  #define AUTO_BED_LEVELING_GRID
+  // Set the boundaries for probing (where the probe can reach).
+  #define LEFT_PROBE_BED_POSITION 15
+  #define RIGHT_PROBE_BED_POSITION 170
+  #define FRONT_PROBE_BED_POSITION 20
+  #define BACK_PROBE_BED_POSITION 170
 
-  #if ENABLED(AUTO_BED_LEVELING_GRID)
+  // The Z probe minimum outer margin (to validate G29 parameters).
+  #define MIN_PROBE_EDGE 10
 
-    #define LEFT_PROBE_BED_POSITION 15
-    #define RIGHT_PROBE_BED_POSITION 170
-    #define FRONT_PROBE_BED_POSITION 20
-    #define BACK_PROBE_BED_POSITION 180
+  // Probe along the Y axis, advancing X after each column
+  //#define PROBE_Y_FIRST
 
-    #define MIN_PROBE_EDGE 10 // The Z probe minimum square sides can be no smaller than this.
+#elif ENABLED(AUTO_BED_LEVELING_3POINT)
 
-    // Set the number of grid points per dimension.
-    // You probably don't need more than 3 (squared=9).
-    #define ABL_GRID_POINTS_X 3
-    #define ABL_GRID_POINTS_Y ABL_GRID_POINTS_X
+  // 3 arbitrary points to probe.
+  // A simple cross-product is used to estimate the plane of the bed.
+  #define ABL_PROBE_PT_1_X 15
+  #define ABL_PROBE_PT_1_Y 180
+  #define ABL_PROBE_PT_2_X 15
+  #define ABL_PROBE_PT_2_Y 20
+  #define ABL_PROBE_PT_3_X 170
+  #define ABL_PROBE_PT_3_Y 20
 
-  #else  // !AUTO_BED_LEVELING_GRID
+#endif
 
-    // Arbitrary points to probe.
-    // A simple cross-product is used to estimate the plane of the bed.
-    #define ABL_PROBE_PT_1_X 15
-    #define ABL_PROBE_PT_1_Y 180
-    #define ABL_PROBE_PT_2_X 15
-    #define ABL_PROBE_PT_2_Y 20
-    #define ABL_PROBE_PT_3_X 170
-    #define ABL_PROBE_PT_3_Y 20
-
-  #endif // !AUTO_BED_LEVELING_GRID
-
-  //#define Z_PROBE_END_SCRIPT "G1 Z10 F12000\nG1 X15 Y330\nG1 Z0.5\nG1 Z10" // These commands will be executed in the end of G29 routine.
-                                                                             // Useful to retract a deployable Z probe.
-
-  // If you've enabled AUTO_BED_LEVELING_FEATURE and are using the Z Probe for Z Homing,
-  // it is highly recommended you also enable Z_SAFE_HOMING below!
-
-#endif // AUTO_BED_LEVELING_FEATURE
+/**
+ * Commands to execute at the end of G29 probing.
+ * Useful to retract or move the Z probe out of the way.
+ */
+//#define Z_PROBE_END_SCRIPT "G1 Z10 F12000\nG1 X15 Y330\nG1 Z0.5\nG1 Z10"
 
 
 // @section homing

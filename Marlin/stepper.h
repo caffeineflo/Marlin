@@ -108,7 +108,7 @@ class Stepper {
       static unsigned char old_OCR0A;
       static volatile unsigned char eISR_Rate;
       #if ENABLED(LIN_ADVANCE)
-        static volatile long e_steps[E_STEPPERS];
+        static volatile int e_steps[E_STEPPERS];
         static int extruder_advance_k;
         static int final_estep_rate;
         static int current_estep_rate[E_STEPPERS]; // Actual extruder speed [steps/s]
@@ -188,8 +188,9 @@ class Stepper {
     //
     // Set the current position in steps
     //
-    static void set_position(const long& x, const long& y, const long& z, const long& e);
-    static void set_e_position(const long& e);
+    static void set_position(const long &a, const long &b, const long &c, const long &e);
+    static void set_position(const AxisEnum &a, const long &v);
+    static void set_e_position(const long &e);
 
     //
     // Set direction bits for all steppers
@@ -239,13 +240,16 @@ class Stepper {
     //
     static FORCE_INLINE bool motor_direction(AxisEnum axis) { return TEST(last_direction_bits, axis); }
 
-    #if HAS_DIGIPOTSS
+    #if HAS_DIGIPOTSS || HAS_MOTOR_CURRENT_PWM
       static void digitalPotWrite(int address, int value);
+      static void digipot_current(uint8_t driver, int current);
     #endif
-    static void microstep_ms(uint8_t driver, int8_t ms1, int8_t ms2);
-    static void digipot_current(uint8_t driver, int current);
-    static void microstep_mode(uint8_t driver, uint8_t stepping);
-    static void microstep_readings();
+
+    #if HAS_MICROSTEPS
+      static void microstep_ms(uint8_t driver, int8_t ms1, int8_t ms2);
+      static void microstep_mode(uint8_t driver, uint8_t stepping);
+      static void microstep_readings();
+    #endif
 
     #if ENABLED(Z_DUAL_ENDSTOPS)
       static FORCE_INLINE void set_homing_flag(bool state) { performing_homing = state; }
@@ -380,7 +384,10 @@ class Stepper {
     }
 
     static void digipot_init();
-    static void microstep_init();
+
+    #if HAS_MICROSTEPS
+      static void microstep_init();
+    #endif
 
 };
 
