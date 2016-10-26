@@ -634,8 +634,8 @@ static bool send_ok[BUFSIZE];
   static inline type pgm_read_any(const type *p)  \
   { return pgm_read_##reader##_near(p); }
 
-DEFINE_PGM_READ_ANY(float,       float);
-DEFINE_PGM_READ_ANY(signed char, byte);
+DEFINE_PGM_READ_ANY(float,       float)
+DEFINE_PGM_READ_ANY(signed char, byte)
 
 #define XYZ_CONSTS_FROM_CONFIG(type, array, CONFIG) \
   static const PROGMEM type array##_P[XYZ] =        \
@@ -643,12 +643,12 @@ DEFINE_PGM_READ_ANY(signed char, byte);
   static inline type array(int axis)          \
   { return pgm_read_any(&array##_P[axis]); }
 
-XYZ_CONSTS_FROM_CONFIG(float, base_min_pos,   MIN_POS);
-XYZ_CONSTS_FROM_CONFIG(float, base_max_pos,   MAX_POS);
-XYZ_CONSTS_FROM_CONFIG(float, base_home_pos,  HOME_POS);
-XYZ_CONSTS_FROM_CONFIG(float, max_length,     MAX_LENGTH);
-XYZ_CONSTS_FROM_CONFIG(float, home_bump_mm,   HOME_BUMP_MM);
-XYZ_CONSTS_FROM_CONFIG(signed char, home_dir, HOME_DIR);
+XYZ_CONSTS_FROM_CONFIG(float, base_min_pos,   MIN_POS)
+XYZ_CONSTS_FROM_CONFIG(float, base_max_pos,   MAX_POS)
+XYZ_CONSTS_FROM_CONFIG(float, base_home_pos,  HOME_POS)
+XYZ_CONSTS_FROM_CONFIG(float, max_length,     MAX_LENGTH)
+XYZ_CONSTS_FROM_CONFIG(float, home_bump_mm,   HOME_BUMP_MM)
+XYZ_CONSTS_FROM_CONFIG(signed char, home_dir, HOME_DIR)
 
 /**
  * ***************************************************************************
@@ -2082,11 +2082,12 @@ static void clean_up_after_endstop_or_probe_move() {
     // Clear endstop flags
     endstops.hit_on_purpose();
 
-    // Tell the planner where we actually are
-    planner.sync_from_steppers();
-
     // Get Z where the steppers were interrupted
     set_current_from_steppers_for_axis(Z_AXIS);
+
+    // Tell the planner where we actually are
+    SYNC_PLAN_POSITION_KINEMATIC();
+
 
     #if ENABLED(DEBUG_LEVELING_FEATURE)
       if (DEBUGGING(LEVELING)) DEBUG_POS("<<< do_probe_move", current_position);
@@ -3145,7 +3146,7 @@ inline void gcode_G4() {
       if (DEBUGGING(LEVELING)) DEBUG_POS(">>> home_delta", current_position);
     #endif
     // Init the current position of all carriages to 0,0,0
-    memset(current_position, 0, sizeof(current_position));
+    ZERO(current_position);
     sync_plan_position();
 
     // Move all carriages together linearly until an endstop is hit.
@@ -3623,9 +3624,10 @@ inline void gcode_G28() {
           }
         }
         else {
-          SERIAL_PROTOCOLLNPGM("X not entered.");
+          SERIAL_CHAR('X'); SERIAL_PROTOCOLLNPGM(" not entered.");
           return;
         }
+
         if (code_seen('Y')) {
           py = code_value_int() - 1;
           if (py < 0 || py >= MESH_NUM_Y_POINTS) {
@@ -3634,14 +3636,15 @@ inline void gcode_G28() {
           }
         }
         else {
-          SERIAL_PROTOCOLLNPGM("Y not entered.");
+          SERIAL_CHAR('Y'); SERIAL_PROTOCOLLNPGM(" not entered.");
           return;
         }
+
         if (code_seen('Z')) {
           mbl.z_values[py][px] = code_value_axis_units(Z_AXIS);
         }
         else {
-          SERIAL_PROTOCOLLNPGM("Z not entered.");
+          SERIAL_CHAR('Z'); SERIAL_PROTOCOLLNPGM(" not entered.");
           return;
         }
         break;
@@ -3651,7 +3654,7 @@ inline void gcode_G28() {
           mbl.z_offset = code_value_axis_units(Z_AXIS);
         }
         else {
-          SERIAL_PROTOCOLLNPGM("Z not entered.");
+          SERIAL_CHAR('Z'); SERIAL_PROTOCOLLNPGM(" not entered.");
           return;
         }
         break;
@@ -3817,7 +3820,7 @@ inline void gcode_G28() {
       set_current_from_steppers_for_axis(ALL_AXES);
 
       // Sync the planner to where the steppers stopped
-      planner.sync_from_steppers();
+      SYNC_PLAN_POSITION_KINEMATIC();
     }
 
     setup_for_endstop_or_probe_move();
@@ -4428,32 +4431,36 @@ inline void gcode_G92() {
 
     #endif
 
+    #if ENABLED(EMERGENCY_PARSER)
+      wait_for_user = true;
+    #endif
+
+    KEEPALIVE_STATE(PAUSED_FOR_USER);
+
     stepper.synchronize();
     refresh_cmd_timeout();
 
     #if ENABLED(ULTIPANEL)
 
+      #if ENABLED(EMERGENCY_PARSER)
+        #define M1_WAIT_CONDITION (!lcd_clicked() && wait_for_user)
+      #else
+        #define M1_WAIT_CONDITION !lcd_clicked()
+      #endif
+
       if (codenum > 0) {
         codenum += previous_cmd_ms;  // wait until this time for a click
-        KEEPALIVE_STATE(PAUSED_FOR_USER);
-        while (PENDING(millis(), codenum) && !lcd_clicked()) idle();
+        while (PENDING(millis(), codenum) && M1_WAIT_CONDITION) idle();
         lcd_ignore_click(false);
       }
       else if (lcd_detected()) {
-        KEEPALIVE_STATE(PAUSED_FOR_USER);
-        while (!lcd_clicked()) idle();
+        while (M1_WAIT_CONDITION) idle();
       }
-      else return;
+      else goto ExitM1;
 
-      if (IS_SD_PRINTING)
-        LCD_MESSAGEPGM(MSG_RESUMING);
-      else
-        LCD_MESSAGEPGM(WELCOME_MSG);
+      IS_SD_PRINTING ? LCD_MESSAGEPGM(MSG_RESUMING) : LCD_MESSAGEPGM(WELCOME_MSG);
 
     #else
-
-      KEEPALIVE_STATE(PAUSED_FOR_USER);
-      wait_for_user = true;
 
       if (codenum > 0) {
         codenum += previous_cmd_ms;  // wait until this time for an M108
@@ -4461,8 +4468,12 @@ inline void gcode_G92() {
       }
       else while (wait_for_user) idle();
 
-      wait_for_user = false;
+    #endif
 
+ExitM1:
+
+    #if ENABLED(EMERGENCY_PARSER)
+      wait_for_user = false;
     #endif
 
     KEEPALIVE_STATE(IN_HANDLER);
@@ -8302,8 +8313,8 @@ void ok_to_send() {
     // Whole unit is the grid box index
     const int gridx = constrain(floor(ratio_x), 0, ABL_GRID_POINTS_X - 2),
               gridy = constrain(floor(ratio_y), 0, ABL_GRID_POINTS_Y - 2),
-              nextx = gridx + (x < PROBE_BED_WIDTH ? 1 : 0),
-              nexty = gridy + (y < PROBE_BED_HEIGHT ? 1 : 0);
+              nextx = min(gridx + 1, ABL_GRID_POINTS_X - 2),
+              nexty = min(gridy + 1, ABL_GRID_POINTS_Y - 2);
 
     // Subtract whole to get the ratio within the grid box
     ratio_x = constrain(ratio_x - gridx, 0.0, 1.0);
@@ -8540,7 +8551,7 @@ void ok_to_send() {
     cartes[X_AXIS] = delta_tower1_x + ex[0] * Xnew + ey[0] * Ynew - ez[0] * Znew;
     cartes[Y_AXIS] = delta_tower1_y + ex[1] * Xnew + ey[1] * Ynew - ez[1] * Znew;
     cartes[Z_AXIS] =             z1 + ex[2] * Xnew + ey[2] * Ynew - ez[2] * Znew;
-  };
+  }
 
   void forward_kinematics_DELTA(float point[ABC]) {
     forward_kinematics_DELTA(point[A_AXIS], point[B_AXIS], point[C_AXIS]);
@@ -9737,7 +9748,9 @@ void setup() {
       safe_delay(BOOTSCREEN_TIMEOUT);
     #elif ENABLED(ULTRA_LCD)
       bootscreen();
-      lcd_init();
+      #if DISABLED(SDSUPPORT)
+        lcd_init();
+      #endif
     #endif
   #endif
 
