@@ -314,9 +314,9 @@
 
   // If you are using a pre-configured hotend then you can use one of the value sets by uncommenting it
   // Ultimaker
-  #define  DEFAULT_Kp 26.12
-  #define  DEFAULT_Ki 3.20
-  #define  DEFAULT_Kd 53.28
+  #define  DEFAULT_Kp 27.23
+  #define  DEFAULT_Ki 2.72
+  #define  DEFAULT_Kd 68.25
 
   // MakerGear
   //#define  DEFAULT_Kp 7.0
@@ -501,7 +501,7 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
  * Override with M201
  *                                      X, Y, Z, E0 [, E1[, E2[, E3]]]
  */
-#define DEFAULT_MAX_ACCELERATION      { 3000, 3000, 100, 5000 }
+#define DEFAULT_MAX_ACCELERATION      { 3000, 3000, 100, 3000 }
 
 /**
  * Default Acceleration (change/s) change = mm/s
