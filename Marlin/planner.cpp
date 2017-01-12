@@ -985,7 +985,9 @@ void Planner::_buffer_line(const float &a, const float &b, const float &c, const
   const uint8_t moves_queued = movesplanned();
 
   // Slow down when the buffer starts to empty, rather than wait at the corner for a buffer refill
-  unsigned long segment_time = lround(1000000.0 / inverse_mm_s);
+  #if ENABLED(SLOWDOWN) || ENABLED(ULTRA_LCD) || defined(XY_FREQUENCY_LIMIT)
+    unsigned long segment_time = lround(1000000.0 / inverse_mm_s);
+  #endif
   #if ENABLED(SLOWDOWN)
     // Segment time im micro seconds
     if (moves_queued > 1 && moves_queued < (BLOCK_BUFFER_SIZE) / 2) {
@@ -1372,16 +1374,16 @@ void Planner::_set_position_mm(const float &a, const float &b, const float &c, c
 
 void Planner::set_position_mm_kinematic(const float position[NUM_AXIS]) {
   #if PLANNER_LEVELING
-    float pos[XYZ] = { position[X_AXIS], position[Y_AXIS], position[Z_AXIS] };
-    apply_leveling(pos);
+    float lpos[XYZ] = { position[X_AXIS], position[Y_AXIS], position[Z_AXIS] };
+    apply_leveling(lpos);
   #else
-    const float * const pos = position;
+    const float * const lpos = position;
   #endif
   #if IS_KINEMATIC
-    inverse_kinematics(pos);
+    inverse_kinematics(lpos);
     _set_position_mm(delta[A_AXIS], delta[B_AXIS], delta[C_AXIS], position[E_AXIS]);
   #else
-    _set_position_mm(pos[X_AXIS], pos[Y_AXIS], pos[Z_AXIS], position[E_AXIS]);
+    _set_position_mm(lpos[X_AXIS], lpos[Y_AXIS], lpos[Z_AXIS], position[E_AXIS]);
   #endif
 }
 
