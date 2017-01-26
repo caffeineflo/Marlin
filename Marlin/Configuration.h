@@ -314,9 +314,9 @@
 
   // If you are using a pre-configured hotend then you can use one of the value sets by uncommenting it
   // Ultimaker
-  #define  DEFAULT_Kp 27.23
-  #define  DEFAULT_Ki 2.72
-  #define  DEFAULT_Kd 68.25
+  #define  DEFAULT_Kp 35.98
+  #define  DEFAULT_Ki 4.26
+  #define  DEFAULT_Kd 76.05
 
   // MakerGear
   //#define  DEFAULT_Kp 7.0
@@ -486,7 +486,7 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
  * Override with M92
  *                                      X, Y, Z, E0 [, E1[, E2[, E3]]]
  */
-#define DEFAULT_AXIS_STEPS_PER_UNIT   { 80.8, 80.8, 391, 145 }
+#define DEFAULT_AXIS_STEPS_PER_UNIT   { 80.12, 80.02, 392.01, 110.03 }
 
 /**
  * Default Max Feed Rate (mm/s)
