@@ -674,7 +674,6 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
 
 // Disables axis stepper immediately when it's not being used.
 // WARNING: When motors turn off there is a chance of losing position accuracy!
-#define DEFAULT_STEPPER_DEACTIVE_TIME 300
 #define DISABLE_X false
 #define DISABLE_Y false
 #define DISABLE_Z false
