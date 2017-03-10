@@ -314,9 +314,9 @@
 
   // If you are using a pre-configured hotend then you can use one of the value sets by uncommenting it
   // Ultimaker
-  #define  DEFAULT_Kp 35.98
-  #define  DEFAULT_Ki 4.26
-  #define  DEFAULT_Kd 76.05
+  #define  DEFAULT_Kp 28.35
+  #define  DEFAULT_Ki 2.83
+  #define  DEFAULT_Kd 71.06
 
   // MakerGear
   //#define  DEFAULT_Kp 7.0
@@ -358,9 +358,9 @@
 
   //120V 250W silicone heater into 4mm borosilicate (MendelMax 1.5+)
   //from FOPDT model - kp=.39 Tp=405 Tdead=66, Tc set to 79.2, aggressive factor of .15 (vs .1, 1, 10)
-  #define  DEFAULT_bedKp 206.52
-  #define  DEFAULT_bedKi 38.91
-  #define  DEFAULT_bedKd 274.05
+  #define  DEFAULT_bedKp 155.05
+  #define  DEFAULT_bedKi 29.21
+  #define  DEFAULT_bedKd 205.77
 
   //120V 250W silicone heater into 4mm borosilicate (MendelMax 1.5+)
   //from pidautotune
@@ -674,6 +674,7 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
 
 // Disables axis stepper immediately when it's not being used.
 // WARNING: When motors turn off there is a chance of losing position accuracy!
+#define DEFAULT_STEPPER_DEACTIVE_TIME 300
 #define DISABLE_X false
 #define DISABLE_Y false
 #define DISABLE_Z false
