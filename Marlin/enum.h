@@ -91,26 +91,6 @@ enum EndstopEnum {
   Z2_MAX
 };
 
-/**
- * Temperature
- * Stages in the ISR loop
- */
-enum TempState {
-  PrepareTemp_0,
-  MeasureTemp_0,
-  PrepareTemp_BED,
-  MeasureTemp_BED,
-  PrepareTemp_1,
-  MeasureTemp_1,
-  PrepareTemp_2,
-  MeasureTemp_2,
-  PrepareTemp_3,
-  MeasureTemp_3,
-  Prepare_FILWIDTH,
-  Measure_FILWIDTH,
-  StartupDelay // Startup, delay initial temp reading a tiny bit so the hardware can settle
-};
-
 #if ENABLED(EMERGENCY_PARSER)
   enum e_parser_state {
     state_RESET,
@@ -162,16 +142,6 @@ enum TempState {
     IN_PROCESS,         // Known to be blocking command input (as in G29)
     PAUSED_FOR_USER,    // Blocking pending any input
     PAUSED_FOR_INPUT    // Blocking pending text input (concept)
-  };
-#endif
-
-#if ENABLED(PROBE_MANUALLY)
-  enum ABLState {
-    ABLReport,
-    ABLStart,
-    ABLNext,
-    ABLSet,
-    ABLReset
   };
 #endif
 
