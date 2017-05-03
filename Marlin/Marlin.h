@@ -302,9 +302,9 @@ float code_value_temp_diff();
   extern float endstop_adj[ABC],
                delta_radius,
                delta_diagonal_rod,
+               delta_calibration_radius,
                delta_segments_per_second,
-               delta_diagonal_rod_trim[ABC],
-               delta_tower_angle_trim[ABC],
+               delta_tower_angle_trim[2],
                delta_clip_start_height;
   void recalc_delta_settings(float radius, float diagonal_rod);
 #elif IS_SCARA
@@ -313,8 +313,9 @@ float code_value_temp_diff();
 
 #if ENABLED(AUTO_BED_LEVELING_BILINEAR)
   extern int bilinear_grid_spacing[2], bilinear_start[2];
-  extern float bed_level_grid[GRID_MAX_POINTS_X][GRID_MAX_POINTS_Y];
-  float bilinear_z_offset(float logical[XYZ]);
+  extern float bilinear_grid_factor[2],
+               z_values[GRID_MAX_POINTS_X][GRID_MAX_POINTS_Y];
+  float bilinear_z_offset(const float logical[XYZ]);
   void set_bed_leveling_enabled(bool enable=true);
 #endif
 
@@ -323,7 +324,7 @@ float code_value_temp_diff();
   linear_fit* lsf_linear_fit(double x[], double y[], double z[], const int);
 #endif
 
-#if PLANNER_LEVELING
+#if HAS_LEVELING
   void reset_bed_level();
 #endif
 
