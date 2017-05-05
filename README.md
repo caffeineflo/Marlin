@@ -5,19 +5,41 @@
 
 Marlin 1.1 represents an evolutionary leap over Marlin 1.0.2. It is the result of over two years of effort by several volunteers around the world who have paid meticulous and sometimes obsessive attention to every detail. For this release we focused on code quality, performance, stability, and overall user experience. Several new features have also been added, many of which require no extra hardware.
 
-For complete Marlin documentation click over to the [Marlin Homepage <marlinfw.org>](http://marlinfw.org/), where you will find in-depth articles, how-to videos, and tutorials on every aspect of Marlin, as the site develops. For release notes, see the [Releases](/MarlinFirmware/Marlin/releases) page.
+Additional documentation can be found at the [Marlin Home Page](http://marlinfw.org/).
+Please test this firmware and inform us if it misbehaves in any way, volunteers are standing by!
 
-## Stable Release Branch
+## Bugfix Branch
 
-This Release branch contains the latest tagged version of Marlin (currently 1.1.0 – May 2017).
+__Not for production use. Use with caution!__
 
-Previous releases of Marlin include [1.0.2-2](/MarlinFirmware/Marlin/tree/1.0.2-2) (December 2016) and [1.0.1](/MarlinFirmware/Marlin/tree/1.0.1) (December 2014). Any version of Marlin prior to 1.0.1 (when we started tagging versions) can be collectively referred to as Marlin 1.0.0.
+This branch is used to accumulate patches to the latest 1.1.x release version. Periodically this branch will form the basis for the next minor 1.1.x release.
 
-## Contributing to Marlin
+Download earlier versions of Marlin on the [Releases page](https://github.com/MarlinFirmware/Marlin/releases). (The latest tagged release of Marlin is version 1.1.0.)
 
-Click on the [Issue Queue](/MarlinFirmware/Marlin/issues) and [Pull Requests](/MarlinFirmware/Marlin/pulls) links above at any time to see what we're currently working on.
+## Recent Changes
+- 1.1.0 - 4 May 2017
+  - See the [1.1.0 Release Notes](https://github.com/MarlinFirmware/Marlin/releases/tag/1.1.0) for a full list of changes.
 
-To submit patches and new features for Marlin 1.1 check out the [bugfix-1.1.x](/MarlinFirmware/Marlin/tree/bugfix-1.1.x) branch, add your commits, and submit a Pull Request back to the `bugfix-1.1.x` branch. Periodically that branch will form the basis for the next minor release.
+- RC8 - 6 Dec 2016
+  - Major performance improvement for Graphical LCDs
+  - Simplified probe configuration
+  - Enable Auto Bed Leveling by type
+  - Reduce serial communication errors
+  - Make Bilinear (Mesh) Grid Leveling available for non-delta
+  - Support for Trinamic TMC2130 SilentStepStick SPI-based drivers
+  - Add `M211` to Enable/Disable Software Endstops
+  - Add `M355` to turn the case light on/off and set brightness
+  - Improved I2C class with full master/slave support
+  - Add `G38.2` `G38.3` command option for CNC style probing
+  - Add `MINIMUM_STEPPER_PULSE` option to adjust step pulse duration
+  - Add `R` parameter support for `G2`/`G3`
+  - Add `M43` optional command (`PINS_DEBUGGING`)
+  - Remove SCARA axis scaling
+  - Improved sanity checking of configuration
+  - Improved support for PlatformIO and command-line build
+  - Usable `DELTA_CALIBRATION_MENU`
+  - Support for Printrbot Rev.F
+  - New and updated languages
 
 Note that our "bugfix" branch will always contain the latest patches to the current release version. These patches may not be widely tested. As always, when using "nightly" builds of Marlin, proceed with full caution.
 
@@ -34,12 +56,15 @@ Arduino IDE now has support for folder hierarchies, so Marlin 1.2 will have a [h
 [![Coverity Scan Build Status](https://scan.coverity.com/projects/2224/badge.svg)](https://scan.coverity.com/projects/2224)
 [![Travis Build Status](https://travis-ci.org/MarlinFirmware/Marlin.svg)](https://travis-ci.org/MarlinFirmware/Marlin)
 
-## Marlin Resources
+## Submitting Patches
 
-- [Marlin Home Page](http://marlinfw.org/) - The Marlin Documentation Project. Join us!
-- [RepRap.org Wiki Page](http://reprap.org/wiki/Marlin) - An overview of Marlin and its role in RepRap.
-- [Marlin Firmware Forum](http://forums.reprap.org/list.php?415) - Find help with configuration, get up and running.
-- [@MarlinFirmware](https://twitter.com/MarlinFirmware) on Twitter - Follow for news, release alerts, and tips & tricks. (Maintained by [@thinkyhead](/thinkyhead).)
+Proposed patches should be submitted as a Pull Request against this branch ([bugfix-1.1.x](https://github.com/MarlinFirmware/Marlin/tree/bugfix-1.1.x)).
+
+- This branch is for fixing bugs and integrating any new features for the duration of the Marlin 1.1.x life-cycle. We've opted for a simplified branch structure while we work on the maintainability and encapsulation of code modules. Version 1.2 and beyond should improve on separation of bug fixes and cutting-edge development.
+- Follow the proper coding style to gain points with the maintainers. See our [Coding Standards](http://marlinfw.org/docs/development/coding_standards.html) page for more information.
+- Please submit your questions and concerns to the [Issue Queue](https://github.com/MarlinFirmware/Marlin/issues). The "naive" question is often the one we forget to ask.
+
+### [RepRap.org Wiki Page](http://reprap.org/wiki/Marlin)
 
 ## Credits
 
