@@ -587,7 +587,8 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
  * disastrous consequences. Use with caution and do your homework.
  *
  */
-#define Z_MIN_PROBE_ENDSTOP 19
+#define Z_MIN_PROBE_ENDSTOP
+#define Z_MIN_PROBE_PIN 19
 
 /**
  * Probe Type
