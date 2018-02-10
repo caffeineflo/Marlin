@@ -37,7 +37,7 @@
  */
 
 // Change EEPROM version if the structure changes
-#define EEPROM_VERSION "V50"
+#define EEPROM_VERSION "V51"
 #define EEPROM_OFFSET 100
 
 // Check the integrity of data offsets.
@@ -70,6 +70,8 @@
 #if ENABLED(FWRETRACT)
   #include "fwretract.h"
 #endif
+
+#pragma pack(push, 1) // No padding between variables
 
 typedef struct PID { float Kp, Ki, Kd; } PID;
 typedef struct PIDC { float Kp, Ki, Kd, Kc; } PIDC;
@@ -170,9 +172,9 @@ typedef struct SettingsDataStruct {
   //
   // ULTIPANEL
   //
-  int lcd_preheat_hotend_temp[2],                       // M145 S0 H
-      lcd_preheat_bed_temp[2],                          // M145 S0 B
-      lcd_preheat_fan_speed[2];                         // M145 S0 F
+  int16_t lcd_preheat_hotend_temp[2],                   // M145 S0 H
+          lcd_preheat_bed_temp[2],                      // M145 S0 B
+          lcd_preheat_fan_speed[2];                     // M145 S0 F
 
   //
   // PIDTEMP
@@ -189,7 +191,7 @@ typedef struct SettingsDataStruct {
   //
   // HAS_LCD_CONTRAST
   //
-  uint16_t lcd_contrast;                                // M250 C
+  int16_t lcd_contrast;                                // M250 C
 
   //
   // FWRETRACT
@@ -214,7 +216,7 @@ typedef struct SettingsDataStruct {
   // HAS_TRINAMIC
   //
   uint16_t tmc_stepper_current[11];                     // M906 X Y Z X2 Y2 Z2 E0 E1 E2 E3 E4
-  int16_t tmc_sgt[2];                                   // M914 X Y
+  int16_t tmc_sgt[XYZ];                                 // M914 X Y Z
 
   //
   // LIN_ADVANCE
@@ -246,6 +248,8 @@ typedef struct SettingsDataStruct {
         filament_change_load_length[MAX_EXTRUDERS];     // M603 T L
 
 } SettingsData;
+
+#pragma pack(pop)
 
 MarlinSettings settings;
 
@@ -618,7 +622,7 @@ void MarlinSettings::postprocess() {
     _FIELD_TEST(lcd_contrast);
 
     #if !HAS_LCD_CONTRAST
-      const uint16_t lcd_contrast = 32;
+      const int16_t lcd_contrast = 32;
     #endif
     EEPROM_WRITE(lcd_contrast);
 
@@ -736,24 +740,28 @@ void MarlinSettings::postprocess() {
     //
     // TMC2130 Sensorless homing threshold
     //
-    int16_t thrs;
-    #if ENABLED(SENSORLESS_HOMING)
-      #if ENABLED(X_IS_TMC2130)
-        thrs = stepperX.sgt();
+    int16_t thrs[XYZ] = {
+      #if ENABLED(SENSORLESS_HOMING)
+        #if ENABLED(X_IS_TMC2130) && defined(X_HOMING_SENSITIVITY)
+          stepperX.sgt(),
+        #else
+          0,
+        #endif
+        #if ENABLED(Y_IS_TMC2130) && defined(Y_HOMING_SENSITIVITY)
+          stepperY.sgt(),
+        #else
+          0
+        #endif
+        #if ENABLED(Z_IS_TMC2130) && defined(Z_HOMING_SENSITIVITY)
+          stepperZ.sgt()
+        #else
+          0
+        #endif
       #else
-        thrs = 0;
+        0
       #endif
-      EEPROM_WRITE(thrs);
-      #if ENABLED(Y_IS_TMC2130)
-        thrs = stepperY.sgt();
-      #else
-        thrs = 0;
-      #endif
-      EEPROM_WRITE(thrs);
-    #else
-      thrs = 0;
-      for (uint8_t q = 2; q--;) EEPROM_WRITE(thrs);
-    #endif
+    };
+    EEPROM_WRITE(thrs);
 
     //
     // Linear Advance
@@ -775,8 +783,8 @@ void MarlinSettings::postprocess() {
     #if HAS_MOTOR_CURRENT_PWM
       for (uint8_t q = 3; q--;) EEPROM_WRITE(stepper.motor_current_setting[q]);
     #else
-      const uint32_t dummyui32 = 0;
-      for (uint8_t q = 3; q--;) EEPROM_WRITE(dummyui32);
+      const uint32_t dummyui32[3] = { 0 };
+      EEPROM_WRITE(dummyui32);
     #endif
 
     //
@@ -1160,7 +1168,7 @@ void MarlinSettings::postprocess() {
       _FIELD_TEST(lcd_contrast);
 
       #if !HAS_LCD_CONTRAST
-        uint16_t lcd_contrast;
+        int16_t lcd_contrast;
       #endif
       EEPROM_READ(lcd_contrast);
 
@@ -1260,29 +1268,37 @@ void MarlinSettings::postprocess() {
        * TMC2130 Sensorless homing threshold.
        * X and X2 use the same value
        * Y and Y2 use the same value
+       * Z and Z2 use the same value
        */
-      int16_t thrs;
+      int16_t thrs[XYZ];
+      EEPROM_READ(thrs);
       #if ENABLED(SENSORLESS_HOMING)
-        EEPROM_READ(thrs);
         if (!validating) {
-          #if ENABLED(X_IS_TMC2130)
-            stepperX.sgt(thrs);
+          #ifdef X_HOMING_SENSITIVITY
+            #if ENABLED(X_IS_TMC2130)
+              stepperX.sgt(thrs[0]);
+            #endif
+            #if ENABLED(X2_IS_TMC2130)
+              stepperX2.sgt(thrs[0]);
+            #endif
           #endif
-          #if ENABLED(X2_IS_TMC2130)
-            stepperX2.sgt(thrs);
+          #ifdef Y_HOMING_SENSITIVITY
+            #if ENABLED(Y_IS_TMC2130)
+              stepperY.sgt(thrs[1]);
+            #endif
+            #if ENABLED(Y2_IS_TMC2130)
+              stepperY2.sgt(thrs[1]);
+            #endif
+          #endif
+          #ifdef Z_HOMING_SENSITIVITY
+            #if ENABLED(Z_IS_TMC2130)
+              stepperZ.sgt(thrs[2]);
+            #endif
+            #if ENABLED(Z2_IS_TMC2130)
+              stepperZ2.sgt(thrs[2]);
+            #endif
           #endif
         }
-        EEPROM_READ(thrs);
-        if (!validating) {
-          #if ENABLED(Y_IS_TMC2130)
-            stepperY.sgt(thrs);
-          #endif
-          #if ENABLED(Y2_IS_TMC2130)
-            stepperY2.sgt(thrs);
-          #endif
-        }
-      #else
-        for (uint8_t q = 0; q < 2; q++) EEPROM_READ(thrs);
       #endif
 
       //
@@ -1308,8 +1324,8 @@ void MarlinSettings::postprocess() {
       #if HAS_MOTOR_CURRENT_PWM
         for (uint8_t q = 3; q--;) EEPROM_READ(stepper.motor_current_setting[q]);
       #else
-        uint32_t dummyui32;
-        for (uint8_t q = 3; q--;) EEPROM_READ(dummyui32);
+        uint32_t dummyui32[3];
+        EEPROM_READ(dummyui32);
       #endif
 
       //
@@ -1750,17 +1766,29 @@ void MarlinSettings::reset() {
   #endif
 
   #if ENABLED(SENSORLESS_HOMING)
-    #if ENABLED(X_IS_TMC2130)
-      stepperX.sgt(X_HOMING_SENSITIVITY);
+    #ifdef X_HOMING_SENSITIVITY
+      #if ENABLED(X_IS_TMC2130)
+        stepperX.sgt(X_HOMING_SENSITIVITY);
+      #endif
+      #if ENABLED(X2_IS_TMC2130)
+        stepperX2.sgt(X_HOMING_SENSITIVITY);
+      #endif
     #endif
-    #if ENABLED(X2_IS_TMC2130)
-      stepperX2.sgt(X_HOMING_SENSITIVITY);
+    #ifdef Y_HOMING_SENSITIVITY
+      #if ENABLED(Y_IS_TMC2130)
+        stepperY.sgt(Y_HOMING_SENSITIVITY);
+      #endif
+      #if ENABLED(Y2_IS_TMC2130)
+        stepperY2.sgt(Y_HOMING_SENSITIVITY);
+      #endif
     #endif
-    #if ENABLED(Y_IS_TMC2130)
-      stepperY.sgt(Y_HOMING_SENSITIVITY);
-    #endif
-    #if ENABLED(Y2_IS_TMC2130)
-      stepperY2.sgt(Y_HOMING_SENSITIVITY);
+    #ifdef Z_HOMING_SENSITIVITY
+      #if ENABLED(Z_IS_TMC2130)
+        stepperZ.sgt(Z_HOMING_SENSITIVITY);
+      #endif
+      #if ENABLED(Z2_IS_TMC2130)
+        stepperZ2.sgt(Z_HOMING_SENSITIVITY);
+      #endif
     #endif
   #endif
 
@@ -1770,8 +1798,8 @@ void MarlinSettings::reset() {
   #endif
 
   #if HAS_MOTOR_CURRENT_PWM
-    uint32_t tmp_motor_current_setting[3] = PWM_MOTOR_CURRENT;
-    for (uint8_t q = 3; q--;)
+    uint32_t tmp_motor_current_setting[XYZ] = PWM_MOTOR_CURRENT;
+    for (uint8_t q = XYZ; q--;)
       stepper.digipot_current(q, (stepper.motor_current_setting[q] = tmp_motor_current_setting[q]));
   #endif
 
@@ -2230,12 +2258,15 @@ void MarlinSettings::reset() {
       }
       CONFIG_ECHO_START;
       #if ENABLED(SKEW_CORRECTION_FOR_Z)
-        SERIAL_ECHO("  M852 I");
+        SERIAL_ECHOPGM("  M852 I");
         SERIAL_ECHO_F(LINEAR_UNIT(planner.xy_skew_factor), 6);
-        SERIAL_ECHOPAIR(" J", LINEAR_UNIT(planner.xz_skew_factor));
-        SERIAL_ECHOLNPAIR(" K", LINEAR_UNIT(planner.yz_skew_factor));
+        SERIAL_ECHOPGM(" J");
+        SERIAL_ECHO_F(LINEAR_UNIT(planner.xz_skew_factor), 6);
+        SERIAL_ECHOPGM(" K");
+        SERIAL_ECHO_F(LINEAR_UNIT(planner.yz_skew_factor), 6);
+        SERIAL_EOL();
       #else
-        SERIAL_ECHO("  M852 S");
+        SERIAL_ECHOPGM("  M852 S");
         SERIAL_ECHO_F(LINEAR_UNIT(planner.xy_skew_factor), 6);
         SERIAL_EOL();
       #endif
@@ -2250,7 +2281,7 @@ void MarlinSettings::reset() {
         SERIAL_ECHOLNPGM("Stepper driver current:");
       }
       CONFIG_ECHO_START;
-      SERIAL_ECHO("  M906");
+      SERIAL_ECHOPGM("  M906");
       #if ENABLED(X_IS_TMC2130) || ENABLED(X_IS_TMC2208)
         SERIAL_ECHOPAIR(" X ", stepperX.getCurrent());
       #endif
@@ -2296,18 +2327,30 @@ void MarlinSettings::reset() {
         SERIAL_ECHOLNPGM("Sensorless homing threshold:");
       }
       CONFIG_ECHO_START;
-      SERIAL_ECHO("  M914");
-      #if ENABLED(X_IS_TMC2130)
-        SERIAL_ECHOPAIR(" X", stepperX.sgt());
+      SERIAL_ECHOPGM("  M914");
+      #ifdef X_HOMING_SENSITIVITY
+        #if ENABLED(X_IS_TMC2130)
+          SERIAL_ECHOPAIR(" X", stepperX.sgt());
+        #endif
+        #if ENABLED(X2_IS_TMC2130)
+          SERIAL_ECHOPAIR(" X2 ", stepperX2.sgt());
+        #endif
       #endif
-      #if ENABLED(X2_IS_TMC2130)
-        SERIAL_ECHOPAIR(" X2 ", stepperX2.sgt());
+      #ifdef Y_HOMING_SENSITIVITY
+        #if ENABLED(Y_IS_TMC2130)
+          SERIAL_ECHOPAIR(" Y", stepperY.sgt());
+        #endif
+        #if ENABLED(X2_IS_TMC2130)
+          SERIAL_ECHOPAIR(" Y2 ", stepperY2.sgt());
+        #endif
       #endif
-      #if ENABLED(Y_IS_TMC2130)
-        SERIAL_ECHOPAIR(" Y", stepperY.sgt());
-      #endif
-      #if ENABLED(X2_IS_TMC2130)
-        SERIAL_ECHOPAIR(" Y2 ", stepperY2.sgt());
+      #ifdef Z_HOMING_SENSITIVITY
+        #if ENABLED(Z_IS_TMC2130)
+          SERIAL_ECHOPAIR(" Z", stepperZ.sgt());
+        #endif
+        #if ENABLED(Z2_IS_TMC2130)
+          SERIAL_ECHOPAIR(" Z2 ", stepperZ2.sgt());
+        #endif
       #endif
       SERIAL_EOL();
     #endif

@@ -59,6 +59,8 @@ void idle(
 
 void manage_inactivity(bool ignore_stepper_queue = false);
 
+extern const char axis_codes[XYZE];
+
 #if ENABLED(DUAL_X_CARRIAGE) || ENABLED(DUAL_NOZZLE_DUPLICATION_MODE)
   extern bool extruder_duplication_enabled;
 #endif
@@ -223,10 +225,6 @@ void clear_command_queue();
 
 extern millis_t previous_cmd_ms;
 inline void refresh_cmd_timeout() { previous_cmd_ms = millis(); }
-
-#if ENABLED(FAST_PWM_FAN)
-  void setPwmFrequency(uint8_t pin, int val);
-#endif
 
 /**
  * Feedrate scaling and conversion
@@ -415,6 +413,7 @@ void report_current_position();
 
 #if HAS_BED_PROBE
   extern float zprobe_zoffset;
+  bool set_probe_deployed(const bool deploy);
   #define DEPLOY_PROBE() set_probe_deployed(true)
   #define STOW_PROBE() set_probe_deployed(false)
 #else
@@ -439,6 +438,10 @@ void report_current_position();
     extern bool fans_paused;
     extern int16_t paused_fanSpeeds[FAN_COUNT];
   #endif
+#endif
+
+#if HAS_CONTROLLERFAN
+  extern int controllerFanSpeed;
 #endif
 
 #if ENABLED(BARICUDA)
