@@ -4606,8 +4606,12 @@ void home_all_axes() { gcode_G28(true); }
         abl_grid_points_y = parser.intval('Y', GRID_MAX_POINTS_Y);
         if (parser.seenval('P')) abl_grid_points_x = abl_grid_points_y = parser.value_int();
 
-        if (abl_grid_points_x < 2 || abl_grid_points_y < 2) {
-          SERIAL_PROTOCOLLNPGM("?Number of probe points is implausible (2 minimum).");
+        if (!WITHIN(abl_grid_points_x, 2, GRID_MAX_POINTS_X)) {
+          SERIAL_PROTOCOLLNPGM("?Probe points (X) is implausible (2-" STRINGIFY(GRID_MAX_POINTS_X) ").");
+          return;
+        }
+        if (!WITHIN(abl_grid_points_y, 2, GRID_MAX_POINTS_Y)) {
+          SERIAL_PROTOCOLLNPGM("?Probe points (Y) is implausible (2-" STRINGIFY(GRID_MAX_POINTS_Y) ").");
           return;
         }
 
@@ -10610,8 +10614,8 @@ inline void gcode_M502() {
   #if ENABLED(SENSORLESS_HOMING)
     inline void gcode_M914() {
       #define TMC_SET_GET_SGT(P,Q) do { \
-        if (parser.seen(axis_codes[X_AXIS])) tmc_set_sgt(stepperX, extended_axis_codes[TMC_X], parser.value_int()); \
-        else tmc_get_sgt(stepperX, extended_axis_codes[TMC_X]); } while(0)
+        if (parser.seen(axis_codes[P##_AXIS])) tmc_set_sgt(stepper##Q, extended_axis_codes[TMC_##Q], parser.value_int()); \
+        else tmc_get_sgt(stepper##Q, extended_axis_codes[TMC_##Q]); } while(0)
 
       #ifdef X_HOMING_SENSITIVITY
         #if ENABLED(X_IS_TMC2130) || ENABLED(IS_TRAMS)
@@ -12948,7 +12952,7 @@ void prepare_move_to_destination() {
       angular_travel = RADIANS(360);
 
     const float flat_mm = radius * angular_travel,
-                mm_of_travel = linear_travel ? HYPOT(flat_mm, linear_travel) : flat_mm;
+                mm_of_travel = linear_travel ? HYPOT(flat_mm, linear_travel) : FABS(flat_mm);
     if (mm_of_travel < 0.001) return;
 
     uint16_t segments = FLOOR(mm_of_travel / (MM_PER_ARC_SEGMENT));
@@ -13636,6 +13640,9 @@ void setup() {
   SERIAL_PROTOCOLLNPGM("start");
   SERIAL_ECHO_START();
 
+  #if ENABLED(HAVE_TMC2130)
+    tmc_init_cs_pins();
+  #endif
   #if ENABLED(HAVE_TMC2208)
     tmc2208_serial_begin();
   #endif
