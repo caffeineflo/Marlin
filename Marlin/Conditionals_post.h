@@ -650,8 +650,13 @@
   #define E4_IS_TRINAMIC (ENABLED(E4_IS_TMC2130) || ENABLED(E4_IS_TMC2208))
 
   // Disable Z axis sensorless homing if a probe is used to home the Z axis
-  #if ENABLED(SENSORLESS_HOMING) && HOMING_Z_WITH_PROBE
-    #undef Z_HOMING_SENSITIVITY
+  #if ENABLED(SENSORLESS_HOMING)
+    #define X_SENSORLESS (ENABLED(X_IS_TMC2130) && defined(X_HOMING_SENSITIVITY))
+    #define Y_SENSORLESS (ENABLED(Y_IS_TMC2130) && defined(Y_HOMING_SENSITIVITY))
+    #define Z_SENSORLESS (ENABLED(Z_IS_TMC2130) && defined(Z_HOMING_SENSITIVITY))
+    #if HOMING_Z_WITH_PROBE
+      #undef Z_HOMING_SENSITIVITY
+    #endif
   #endif
 
   // Endstops and bed probe
@@ -724,7 +729,6 @@
 
   // Sensors
   #define HAS_FILAMENT_WIDTH_SENSOR (PIN_EXISTS(FILWIDTH))
-  #define HAS_FIL_RUNOUT (PIN_EXISTS(FIL_RUNOUT))
 
   // User Interface
   #define HAS_HOME (PIN_EXISTS(HOME))
@@ -849,11 +853,6 @@
         #define XY_PROBE_SPEED 4000
       #endif
     #endif
-    #if Z_CLEARANCE_BETWEEN_PROBES > Z_CLEARANCE_DEPLOY_PROBE
-      #define _Z_CLEARANCE_DEPLOY_PROBE Z_CLEARANCE_BETWEEN_PROBES
-    #else
-      #define _Z_CLEARANCE_DEPLOY_PROBE Z_CLEARANCE_DEPLOY_PROBE
-    #endif
   #else
     #undef X_PROBE_OFFSET_FROM_EXTRUDER
     #undef Y_PROBE_OFFSET_FROM_EXTRUDER
@@ -952,7 +951,7 @@
   /**
    * Set granular options based on the specific type of leveling
    */
-  #define UBL_SEGMENTED  (ENABLED(AUTO_BED_LEVELING_UBL) && (ENABLED(DELTA) || ENABLED(SEGMENT_LEVELED_MOVES)))
+  #define UBL_SEGMENTED  (ENABLED(AUTO_BED_LEVELING_UBL) && (ENABLED(DELTA)))
   #define ABL_PLANAR     (ENABLED(AUTO_BED_LEVELING_LINEAR) || ENABLED(AUTO_BED_LEVELING_3POINT))
   #define ABL_GRID       (ENABLED(AUTO_BED_LEVELING_LINEAR) || ENABLED(AUTO_BED_LEVELING_BILINEAR))
   #define OLDSCHOOL_ABL  (ABL_PLANAR || ABL_GRID)
@@ -1077,9 +1076,9 @@
   #endif
 
   /**
-   * VIKI2, miniVIKI, and AZSMZ_12864 require DOGLCD_SCK and DOGLCD_MOSI to be defined.
+   * VIKI2, miniVIKI, AZSMZ_12864, and MKS_12864OLED_SSD1306 require DOGLCD_SCK and DOGLCD_MOSI to be defined.
    */
-  #if ENABLED(VIKI2) || ENABLED(miniVIKI) || ENABLED(AZSMZ_12864)
+  #if ENABLED(VIKI2) || ENABLED(miniVIKI) || ENABLED(AZSMZ_12864) || ENABLED(MKS_12864OLED_SSD1306)
     #ifndef DOGLCD_SCK
       #define DOGLCD_SCK  SCK_PIN
     #endif

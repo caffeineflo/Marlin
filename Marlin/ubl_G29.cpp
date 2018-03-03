@@ -596,21 +596,8 @@
     if (parser.seen('S')) {     // Store (or Save) Current Mesh Data
       g29_storage_slot = parser.has_value() ? parser.value_int() : storage_slot;
 
-      if (g29_storage_slot == -1) {                     // Special case, we are going to 'Export' the mesh to the
-        SERIAL_ECHOLNPGM("G29 I 999");              // host in a form it can be reconstructed on a different machine
-        for (uint8_t x = 0; x < GRID_MAX_POINTS_X; x++)
-          for (uint8_t y = 0;  y < GRID_MAX_POINTS_Y; y++)
-            if (!isnan(z_values[x][y])) {
-              SERIAL_ECHOPAIR("M421 I ", x);
-              SERIAL_ECHOPAIR(" J ", y);
-              SERIAL_ECHOPGM(" Z ");
-              SERIAL_ECHO_F(z_values[x][y], 6);
-              SERIAL_ECHOPAIR(" ; X ", LOGICAL_X_POSITION(mesh_index_to_xpos(x)));
-              SERIAL_ECHOPAIR(", Y ", LOGICAL_Y_POSITION(mesh_index_to_ypos(y)));
-              SERIAL_EOL();
-            }
-        return;
-      }
+      if (g29_storage_slot == -1)                     // Special case, we are going to 'Export' the mesh to the
+        return report_current_mesh();
 
       int16_t a = settings.calc_num_meshes();
 
@@ -763,10 +750,7 @@
           const float measured_z = probe_pt(rawx, rawy, stow_probe, g29_verbose_level); // TODO: Needs error handling
           z_values[location.x_index][location.y_index] = measured_z;
         }
-        MYSERIAL.flush();  // G29 P2's take a long time to complete.   PronterFace can
-                           // over run the serial character buffer with M105's without
-                           // this fix
-
+        SERIAL_FLUSH(); // Prevent host M105 buffer overrun.
       } while (location.x_index >= 0 && --max_iterations);
 
       STOW_PROBE();
@@ -904,9 +888,7 @@
           SERIAL_PROTOCOL_F(z_values[location.x_index][location.y_index], 6);
           SERIAL_EOL();
         }
-        MYSERIAL.flush();  // G29 P2's take a long time to complete.   PronterFace can
-                           // over run the serial character buffer with M105's without
-                           // this fix
+        SERIAL_FLUSH(); // Prevent host M105 buffer overrun.
       } while (location.x_index >= 0 && location.y_index >= 0);
 
       if (do_ubl_mesh_map) display_map(g29_map_type);  // show user where we're probing
@@ -1418,9 +1400,7 @@
             do_blocking_move_to_z(h_offset + new_z); // Move the nozzle as the point is edited
           #endif
           idle();
-          MYSERIAL.flush(); // G29 P2's take a long time to complete.   PronterFace can
-                             // over run the serial character buffer with M105's without
-                             // this fix
+          SERIAL_FLUSH(); // Prevent host M105 buffer overrun.
         } while (!is_lcd_clicked());
 
         if (!lcd_map_control) lcd_return_to_status();
@@ -1684,7 +1664,7 @@
             }
           #endif
 
-          z_values[i][j] += z_tmp - lsf_results.D;
+          z_values[i][j] = z_tmp - lsf_results.D;
         }
       }
 
