@@ -42,11 +42,11 @@
  * the bleeding-edge source code, but sometimes this is not enough. This check
  * forces a minimum config file revision. Otherwise Marlin will not build.
  */
-#if ! defined(CONFIGURATION_H_VERSION) || CONFIGURATION_H_VERSION < REQUIRED_CONFIGURATION_H_VERSION
+#if !defined(CONFIGURATION_H_VERSION) || CONFIGURATION_H_VERSION < REQUIRED_CONFIGURATION_H_VERSION
   #error "You are using an old Configuration.h file, update it before building Marlin."
 #endif
 
-#if ! defined(CONFIGURATION_ADV_H_VERSION) || CONFIGURATION_ADV_H_VERSION < REQUIRED_CONFIGURATION_ADV_H_VERSION
+#if !defined(CONFIGURATION_ADV_H_VERSION) || CONFIGURATION_ADV_H_VERSION < REQUIRED_CONFIGURATION_ADV_H_VERSION
   #error "You are using an old Configuration_adv.h file, update it before building Marlin."
 #endif
 
@@ -275,7 +275,7 @@
 /**
  * Serial
  */
-#ifndef USBCON
+#if !(defined(__AVR__) && defined(USBCON))
   #if ENABLED(SERIAL_XON_XOFF) && RX_BUFFER_SIZE < 1024
     #error "SERIAL_XON_XOFF requires RX_BUFFER_SIZE >= 1024 for reliable transfers without drops."
   #elif RX_BUFFER_SIZE && (RX_BUFFER_SIZE < 2 || !IS_POWER_OF_2(RX_BUFFER_SIZE))
@@ -346,6 +346,13 @@ static_assert(X_MAX_LENGTH >= X_BED_SIZE && Y_MAX_LENGTH >= Y_BED_SIZE,
   #endif
 #elif ENABLED(LCD_SET_PROGRESS_MANUALLY) && DISABLED(DOGLCD)
   #error "LCD_SET_PROGRESS_MANUALLY requires LCD_PROGRESS_BAR or Graphical LCD."
+#endif
+
+/**
+ * Custom Boot and Status screens
+ */
+#if DISABLED(DOGLCD) && (ENABLED(SHOW_CUSTOM_BOOTSCREEN) || ENABLED(CUSTOM_STATUS_SCREEN_IMAGE))
+  #error "Graphical LCD is required for SHOW_CUSTOM_BOOTSCREEN and CUSTOM_STATUS_SCREEN_IMAGE."
 #endif
 
 /**
@@ -1274,7 +1281,7 @@ static_assert(1 >= 0
 /**
  * emergency-command parser
  */
-#if ENABLED(EMERGENCY_PARSER) && defined(USBCON)
+#if ENABLED(EMERGENCY_PARSER) && defined(__AVR__) && defined(USBCON)
   #error "EMERGENCY_PARSER does not work on boards with AT90USB processors (USBCON)."
 #endif
 
