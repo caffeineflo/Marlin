@@ -370,9 +370,9 @@
   // If you are using a pre-configured hotend then you can use one of the value sets by uncommenting it
 
   // Ultimaker
-  #define  DEFAULT_Kp 25.39
-  #define  DEFAULT_Ki 3.73
-  #define  DEFAULT_Kd 43.16
+  #define  DEFAULT_Kp 16.97
+  #define  DEFAULT_Ki 2.30
+  #define  DEFAULT_Kd 31.28
 
   // MakerGear
   //#define  DEFAULT_Kp 7.0
@@ -934,7 +934,7 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
 #if ENABLED(AUTO_BED_LEVELING_LINEAR) || ENABLED(AUTO_BED_LEVELING_BILINEAR)
 
   // Set the number of grid points per dimension.
-  #define GRID_MAX_POINTS_X 3
+  #define GRID_MAX_POINTS_X 5
   #define GRID_MAX_POINTS_Y GRID_MAX_POINTS_X
 
   // The Z probe minimum outer margin (to validate G29 parameters).
