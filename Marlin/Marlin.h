@@ -184,7 +184,7 @@ void sync_plan_position_e();
   #define SYNC_PLAN_POSITION_KINEMATIC() sync_plan_position()
 #endif
 
-void FlushSerialRequestResend();
+void flush_and_request_resend();
 void ok_to_send();
 
 void kill(const char*);
@@ -389,6 +389,11 @@ void report_current_position();
 #if HAS_BED_PROBE
   extern float zprobe_zoffset;
   bool set_probe_deployed(const bool deploy);
+  #ifdef Z_AFTER_PROBING
+    void move_z_after_probing();
+  #else
+    inline void move_z_after_probing() {}
+  #endif
   #define DEPLOY_PROBE() set_probe_deployed(true)
   #define STOW_PROBE() set_probe_deployed(false)
 #else
