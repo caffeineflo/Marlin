@@ -1045,9 +1045,9 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
 
 // Manually set the home position. Leave these undefined for automatic settings.
 // For DELTA this is the top-center of the Cartesian print volume.
-#define MANUAL_X_HOME_POS Z_SAFE_HOMING_X_POINT
-#define MANUAL_Y_HOME_POS Z_SAFE_HOMING_Y_POINT
-#define MANUAL_Z_HOME_POS 20
+//#define MANUAL_X_HOME_POS Z_SAFE_HOMING_X_POINT
+//#define MANUAL_Y_HOME_POS Z_SAFE_HOMING_Y_POINT
+//#define MANUAL_Z_HOME_POS 20
 
 // Use "Z Safe Homing" to avoid homing with a Z probe outside the bed area.
 //
@@ -1067,7 +1067,7 @@ const bool Z_MIN_PROBE_ENDSTOP_INVERTING = true; // set to true to invert the lo
 
 // Homing speeds (mm/m)
 #define HOMING_FEEDRATE_XY (100*60)
-#define HOMING_FEEDRATE_Z  (4*60)
+#define HOMING_FEEDRATE_Z  (10*60)
 
 // @section calibrate
 
